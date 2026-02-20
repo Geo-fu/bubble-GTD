@@ -1,7 +1,7 @@
 // Firebase 配置
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-app.js";
 import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-auth.js";
-import { getFirestore, collection, doc, setDoc, deleteDoc, onSnapshot, query, orderBy, serverTimestamp } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-firestore.js";
+import { getFirestore, collection, doc, setDoc, deleteDoc, onSnapshot, query, orderBy, serverTimestamp, getDocs } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-firestore.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyCsdgcHag_08oDCn6pGZU9Sq4tiz762IUU",
@@ -71,20 +71,52 @@ class BubbleTodo {
     });
   }
   
-  loadTodosFromFirebase() {
+  async loadTodosFromFirebase() {
     if (!this.userId) return;
     
     const q = query(collection(db, 'users', this.userId, 'todos'), orderBy('createdAt', 'desc'));
     
-    this.unsubscribe = onSnapshot(q, (snapshot) => {
-      const changes = snapshot.docChanges();
+    // 1. 先获取现有数据
+    try {
+      const snapshot = await getDocs(q);
+      this.todos = []; // 清空本地数据
       
-      changes.forEach((change) => {
+      snapshot.forEach((doc) => {
+        const data = doc.data();
+        const colorConfig = this.getColorByImportance(data.importance);
+        const radius = 20 + Math.pow(data.importance, 2) * 100;
+        
+        this.todos.push({
+          id: doc.id,
+          text: data.text,
+          importance: data.importance,
+          targetImportance: data.importance,
+          reason: data.reason,
+          radius: radius,
+          targetRadius: radius,
+          x: this.centerX + (Math.random() - 0.5) * 200,
+          y: this.centerY + (Math.random() - 0.5) * 200,
+          vx: 0, vy: 0,
+          color: colorConfig.bg,
+          textColor: colorConfig.text,
+          done: false, opacity: 1, scale: 1,
+          isAnalyzing: false
+        });
+      });
+      
+      console.log('Loaded', this.todos.length, 'todos');
+    } catch (e) {
+      console.error('Load failed:', e);
+    }
+    
+    // 2. 然后监听实时更新
+    this.unsubscribe = onSnapshot(q, (snapshot) => {
+      snapshot.docChanges().forEach((change) => {
         const data = change.doc.data();
         const id = change.doc.id;
         
         if (change.type === 'added') {
-          // 检查是否已存在
+          // 检查是否已存在（避免重复添加初始数据）
           if (!this.todos.find(t => t.id === id)) {
             const colorConfig = this.getColorByImportance(data.importance);
             const radius = 20 + Math.pow(data.importance, 2) * 100;
@@ -108,7 +140,7 @@ class BubbleTodo {
           }
         } else if (change.type === 'removed') {
           const index = this.todos.findIndex(t => t.id === id);
-          if (index !== -1) {
+          if (index !== -1 && !this.todos[index].done) {
             this.todos[index].done = true;
             this.triggerExplosion(this.todos[index]);
           }
