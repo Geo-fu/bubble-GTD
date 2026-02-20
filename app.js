@@ -26,7 +26,7 @@ class BubbleTodo {
     this.touch = { x: 0, y: 0, isDown: false, target: null };
     this.longPressTimer = null;
     this.unsubscribe = null;
-    this.unsubscribe = null;
+    this.localIds = new Set(); // 跟踪本地添加的 ID，避免重复
     
     // 物理参数
     this.repulsionBase = 300;
@@ -55,68 +55,40 @@ class BubbleTodo {
     // 使用简单的集合结构，所有人共享
     const q = query(collection(db, 'todos'), orderBy('createdAt', 'desc'));
     
-    // 先获取现有数据
-    try {
-      const snapshot = await getDocs(q);
-      this.todos = [];
-      
-      snapshot.forEach((doc) => {
-        const data = doc.data();
-        
-        const colorConfig = this.getColorByImportance(data.importance);
-        const radius = 20 + Math.pow(data.importance, 2) * 100;
-        
-        this.todos.push({
-          id: doc.id,
-          text: data.text,
-          importance: data.importance,
-          targetImportance: data.importance,
-          reason: data.reason,
-          radius: radius,
-          targetRadius: radius,
-          x: this.centerX + (Math.random() - 0.5) * 200,
-          y: this.centerY + (Math.random() - 0.5) * 200,
-          vx: 0, vy: 0,
-          color: colorConfig.bg,
-          textColor: colorConfig.text,
-          done: false, opacity: 1, scale: 1,
-          isAnalyzing: false
-        });
-      });
-      
-      console.log('Loaded', this.todos.length, 'todos');
-    } catch (e) {
-      console.error('Load failed:', e);
-    }
-    
-    // 监听实时更新
+    // 只使用实时监听，不阻塞加载
     this.unsubscribe = onSnapshot(q, (snapshot) => {
       snapshot.docChanges().forEach((change) => {
         const data = change.doc.data();
         const id = change.doc.id;
         
         if (change.type === 'added') {
-          if (!this.todos.find(t => t.id === id)) {
-            const colorConfig = this.getColorByImportance(data.importance);
-            const radius = 20 + Math.pow(data.importance, 2) * 100;
-            
-            this.todos.push({
-              id: id,
-              text: data.text,
-              importance: data.importance,
-              targetImportance: data.importance,
-              reason: data.reason,
-              radius: radius,
-              targetRadius: radius,
-              x: this.centerX + (Math.random() - 0.5) * 200,
-              y: this.centerY + (Math.random() - 0.5) * 200,
-              vx: 0, vy: 0,
-              color: colorConfig.bg,
-              textColor: colorConfig.text,
-              done: false, opacity: 1, scale: 1,
-              isAnalyzing: false
-            });
+          // 跳过本地已添加的（避免重复）
+          if (this.localIds.has(id)) {
+            this.localIds.delete(id); // 清理
+            return;
           }
+          // 避免重复添加
+          if (this.todos.find(t => t.id === id)) return;
+          
+          const colorConfig = this.getColorByImportance(data.importance);
+          const radius = 20 + Math.pow(data.importance, 2) * 100;
+          
+          this.todos.push({
+            id: id,
+            text: data.text,
+            importance: data.importance,
+            targetImportance: data.importance,
+            reason: data.reason,
+            radius: radius,
+            targetRadius: radius,
+            x: this.centerX + (Math.random() - 0.5) * 200,
+            y: this.centerY + (Math.random() - 0.5) * 200,
+            vx: 0, vy: 0,
+            color: colorConfig.bg,
+            textColor: colorConfig.text,
+            done: false, opacity: 1, scale: 1,
+            isAnalyzing: false
+          });
         } else if (change.type === 'modified') {
           // AI 分析完成后更新
           const index = this.todos.findIndex(t => t.id === id);
@@ -221,6 +193,10 @@ class BubbleTodo {
     // 立即本地显示（0.1秒内）
     const colorConfig = this.getColorByImportance(analysis.score);
     const radius = 20 + Math.pow(analysis.score, 2) * 100;
+    
+    // 标记为本地添加，避免 onSnapshot 重复处理
+    this.localIds.add(id);
+    
     this.todos.push({
       id: id,
       text: text,
