@@ -389,9 +389,11 @@ class BubbleTodo {
       this.ctx.arc(todo.x - r * 0.3, todo.y - r * 0.3, r * 0.2, 0, Math.PI * 2);
       this.ctx.fill();
       
-      // 文字
+      // 文字 - 字体大小与气泡半径成正比
       this.ctx.fillStyle = `rgba(255, 255, 255, ${todo.opacity})`;
-      this.ctx.font = `${Math.max(12, r * 0.2)}px sans-serif`;
+      // 字体大小：最小14px，最大根据半径计算 (r * 0.25)，确保大气泡有大字体
+      const fontSize = Math.max(14, Math.min(r * 0.25, 32));
+      this.ctx.font = `${fontSize}px sans-serif`;
       this.ctx.textAlign = 'center';
       this.ctx.textBaseline = 'middle';
       
@@ -413,10 +415,11 @@ class BubbleTodo {
         this.ctx.fillText(line, todo.x, startY + index * lineHeight);
       });
       
-      // 原因
+      // 原因 - 字体也随气泡大小调整
       if (todo.reason && r > 40) {
         this.ctx.fillStyle = `rgba(255, 255, 255, ${0.6 * todo.opacity})`;
-        this.ctx.font = `${Math.max(10, r * 0.1)}px sans-serif`;
+        const reasonFontSize = Math.max(10, Math.min(r * 0.12, 16));
+        this.ctx.font = `${reasonFontSize}px sans-serif`;
         this.ctx.fillText(todo.reason, todo.x, startY + lines.length * lineHeight + 5);
       }
     }
