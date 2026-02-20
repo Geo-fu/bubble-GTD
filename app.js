@@ -47,8 +47,52 @@ class BubbleTodo {
       if (e.key === 'Enter') this.addTodo();
     });
     
+    // 设置按钮
+    this.initSettings();
+    
     // 直接加载数据，不需要登录
     this.loadTodosFromFirebase();
+  }
+  
+  initSettings() {
+    const settingsBtn = document.getElementById('settingsBtn');
+    const modal = document.getElementById('settingsModal');
+    const closeBtn = document.getElementById('closeModal');
+    const saveBtn = document.getElementById('saveApiKey');
+    const apiKeyInput = document.getElementById('apiKeyInput');
+    
+    // 加载已保存的 key
+    const savedKey = localStorage.getItem('gemini-api-key');
+    if (savedKey) {
+      apiKeyInput.value = savedKey;
+    }
+    
+    settingsBtn.addEventListener('click', () => {
+      modal.classList.add('active');
+    });
+    
+    closeBtn.addEventListener('click', () => {
+      modal.classList.remove('active');
+    });
+    
+    saveBtn.addEventListener('click', () => {
+      const key = apiKeyInput.value.trim();
+      if (key) {
+        localStorage.setItem('gemini-api-key', key);
+        alert('API Key 已保存');
+      } else {
+        localStorage.removeItem('gemini-api-key');
+        alert('已清除 API Key，将使用本地分析');
+      }
+      modal.classList.remove('active');
+    });
+    
+    // 点击模态框外部关闭
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) {
+        modal.classList.remove('active');
+      }
+    });
   }
   
   async loadTodosFromFirebase() {
@@ -260,10 +304,21 @@ class BubbleTodo {
   
   /**
    * Gemini API 语义分析
-   * 使用 Google Gemini 进行真正的语义理解
+   * 需要先在 https://ai.google.dev/ 申请 API Key
    */
   async geminiAnalyze(text) {
-    const API_KEY = 'AIzaSyCsdgcHag_08oDCn6pGZU9Sq4tiz762IUU'; // 使用 Firebase API Key 或单独申请
+    // 从 localStorage 获取 API Key，如果没有则提示用户
+    let API_KEY = localStorage.getItem('gemini-api-key');
+    
+    if (!API_KEY) {
+      // 尝试使用默认 key（仅用于演示）
+      API_KEY = 'YOUR_GEMINI_API_KEY';
+    }
+    
+    if (API_KEY === 'YOUR_GEMINI_API_KEY') {
+      console.log('[BubbleGTD] Gemini API Key not set, using local analysis');
+      throw new Error('API Key not configured');
+    }
     
     try {
       const response = await fetch(
@@ -299,10 +354,17 @@ class BubbleTodo {
       );
       
       if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        console.error('[BubbleGTD] Gemini API error:', response.status, errorData);
         throw new Error(`API error: ${response.status}`);
       }
       
       const data = await response.json();
+      
+      if (!data.candidates || !data.candidates[0]) {
+        throw new Error('Invalid response format');
+      }
+      
       const content = data.candidates[0].content.parts[0].text;
       
       // 解析 JSON
@@ -311,7 +373,7 @@ class BubbleTodo {
         const result = JSON.parse(jsonMatch[0]);
         return {
           score: Math.min(Math.max(result.score, 0.1), 1.0),
-          reason: result.reason || result.category || 'AI分析',
+          reason: result.reason || result.category || '🤖 AI分析',
           needsAI: false // 已经是AI分析的结果
         };
       }
