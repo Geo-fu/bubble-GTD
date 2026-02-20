@@ -171,7 +171,7 @@ class BubbleTodo {
     if (!text) return;
     
     const quickAnalysis = this.quickAnalyze(text);
-    const radius = 25 + quickAnalysis.score * 55;
+    const radius = 20 + Math.pow(quickAnalysis.score, 2) * 100; // 指数增长，区分度更大
     
     const todo = {
       id: Date.now(), text, importance: quickAnalysis.score, targetImportance: quickAnalysis.score,
@@ -188,7 +188,7 @@ class BubbleTodo {
     setTimeout(() => {
       const deepAnalysis = this.deepAnalyze(text);
       todo.targetImportance = deepAnalysis.score;
-      todo.targetRadius = 25 + deepAnalysis.score * 55;
+      todo.targetRadius = 20 + Math.pow(deepAnalysis.score, 2) * 100;
       todo.reason = deepAnalysis.reason;
       todo.color = this.getColorByImportance(deepAnalysis.score);
       todo.isAnalyzing = false;
