@@ -10,13 +10,12 @@ class BubbleTodo {
     this.longPressTimer = null;
     
     // 物理参数
-    this.repulsionBase = 300;      // 基础斥力
-    this.attractionBase = 0.0008;  // 基础引力
-    this.relevanceThreshold = 0.3; // 相关度阈值
+    this.repulsionBase = 300;
+    this.attractionBase = 0.0008;
     
-    // API 配置
-    this.apiKey = 'YOUR_API_KEY';
-    this.useAI = false;
+    // API 配置 - 使用你的 Key
+    this.apiKey = 'sk-bykEHxDd8e40RqS1jjywffXa2FwbFpdKpDzbT7Q1WyTk4kxY';
+    this.useAI = true;
     
     this.init();
   }
@@ -45,227 +44,166 @@ class BubbleTodo {
   }
   
   /**
-   * 计算两个事项的相关度 (0-1)
+   * 调用 Kimi API 进行智能语义分析
    */
-  calculateRelevance(todo1, todo2) {
-    const text1 = todo1.text.toLowerCase();
-    const text2 = todo2.text.toLowerCase();
-    let relevance = 0;
-    
-    // 1. 关键词重叠
-    const keywords1 = this.extractKeywords(text1);
-    const keywords2 = this.extractKeywords(text2);
-    const commonWords = keywords1.filter(w => keywords2.includes(w));
-    if (commonWords.length > 0) {
-      relevance += commonWords.length * 0.15;
+  async analyzeWithAI(text) {
+    try {
+      const response = await fetch('https://api.moonshot.cn/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${this.apiKey}`
+        },
+        body: JSON.stringify({
+          model: 'kimi-k2.5',
+          messages: [{
+            role: 'system',
+            content: `你是一个专业的任务重要性分析专家，基于复利思维评估任务。
+
+请深入理解任务的语义和专业背景：
+- "尽职调查"是投资/并购前的关键调查，涉及重大财务决策，重要性很高
+- "审计"、"风控"、"合规"是金融核心活动
+- "融资"、"并购"、"IPO"具有极高杠杆效应
+- "谈判"、"签约"具有直接商业价值
+- 区分日常事务和战略级任务
+
+分析维度：
+1. 时间复利：对未来有多大累积效应
+2. 边际收益：是否越做越有价值  
+3. 网络效应：是否产生连接价值
+4. 杠杆效应：一份努力能否产生多份回报
+
+请以JSON返回：{"score": 0.85, "reason": "💰 金融高价值 | 🎯 杠杆效应"}`
+          }, {
+            role: 'user',
+            content: `分析这个任务："${text}"`
+          }],
+          temperature: 0.3,
+          max_tokens: 150
+        })
+      });
+      
+      if (!response.ok) throw new Error('API error');
+      
+      const data = await response.json();
+      const content = data.choices[0].message.content;
+      
+      const match = content.match(/\{[\s\S]*\}/);
+      if (match) {
+        const result = JSON.parse(match[0]);
+        return {
+          score: Math.min(Math.max(result.score, 0.1), 1),
+          reason: result.reason || 'AI评估'
+        };
+      }
+    } catch (e) {
+      console.log('AI analysis failed:', e);
     }
-    
-    // 2. 同类型任务（都有复利关键词）
-    const compoundWords = ['学习', '读书', '技能', '产品', '系统', '战略', '团队'];
-    const hasCompound1 = compoundWords.some(w => text1.includes(w));
-    const hasCompound2 = compoundWords.some(w => text2.includes(w));
-    if (hasCompound1 && hasCompound2) relevance += 0.2;
-    
-    // 3. 同紧急程度
-    const urgentWords = ['紧急', '马上', '立刻', 'deadline'];
-    const isUrgent1 = urgentWords.some(w => text1.includes(w));
-    const isUrgent2 = urgentWords.some(w => text2.includes(w));
-    if (isUrgent1 && isUrgent2) relevance += 0.15;
-    
-    // 4. 重要性相近
-    const importanceDiff = Math.abs(todo1.importance - todo2.importance);
-    if (importanceDiff < 0.2) relevance += 0.1;
-    
-    // 5. 人物相关
-    const peopleWords = ['老板', '客户', '领导', 'ceo'];
-    const hasPeople1 = peopleWords.some(w => text1.includes(w));
-    const hasPeople2 = peopleWords.some(w => text2.includes(w));
-    if (hasPeople1 && hasPeople2) relevance += 0.15;
-    
-    // 6. 金融/投资相关性 - 新增
-    const financeWords = ['融资', '并购', '上市', 'ipo', '尽调', '尽职调查', '审计', '估值', '投资'];
-    const hasFinance1 = financeWords.some(w => text1.includes(w));
-    const hasFinance2 = financeWords.some(w => text2.includes(w));
-    if (hasFinance1 && hasFinance2) relevance += 0.3; // 金融相关事项高度相关
-    
-    // 7. 商业/法律相关性 - 新增
-    const businessWords = ['合同', '协议', '法务', '合规', '谈判', '签约'];
-    const hasBusiness1 = businessWords.some(w => text1.includes(w));
-    const hasBusiness2 = businessWords.some(w => text2.includes(w));
-    if (hasBusiness1 && hasBusiness2) relevance += 0.25;
-    
-    return Math.min(relevance, 1);
-  }
-  
-  extractKeywords(text) {
-    // 提取有意义的关键词（过滤常见词）
-    const stopWords = ['的', '了', '是', '在', '我', '有', '和', '就', '不', '人', '都', '一', '一个', '上', '也', '很', '到', '说', '要', '去', '你', '会', '着', '没有', '看', '好', '自己', '这'];
-    return text.split(/[\s,，.。!！?？;；]/)
-      .filter(w => w.length >= 2 && !stopWords.includes(w))
-      .slice(0, 5); // 最多取5个关键词
+    return null;
   }
   
   /**
-   * 快速评估 - 立即显示
+   * 本地快速评估（备用）
    */
-  quickAnalyze(text) {
+  localAnalyze(text) {
     let score = 0.5;
+    const reasons = [];
     const lowerText = text.toLowerCase();
     
-    const urgentWords = ['紧急', '马上', '立刻', '现在', 'deadline', '截止'];
-    urgentWords.forEach(w => { if (lowerText.includes(w)) score += 0.2; });
+    // 金融/投资
+    const financeWords = ['融资', '并购', '上市', 'ipo', '尽调', '尽职调查', '审计', '估值', '投资', '风控'];
+    if (financeWords.some(w => lowerText.includes(w))) {
+      score += 0.25;
+      reasons.push('💰 金融/投资');
+    }
     
-    const importantPeople = ['老板', '客户', '领导', 'ceo', '总裁'];
-    importantPeople.forEach(w => { if (lowerText.includes(w)) score += 0.15; });
+    // 商业关键
+    const businessWords = ['谈判', '签约', '合作', '客户', '战略', '决策'];
+    if (businessWords.some(w => lowerText.includes(w))) {
+      score += 0.15;
+      reasons.push('💼 商业关键');
+    }
     
-    const compoundWords = ['学习', '读书', '技能', '产品', '系统', '战略', '团队'];
-    compoundWords.forEach(w => { if (lowerText.includes(w)) score += 0.1; });
+    // 紧急
+    if (/紧急|马上|立刻|deadline|截止/.test(lowerText)) {
+      score += 0.1;
+      reasons.push('⏰ 紧急');
+    }
     
     return {
       score: Math.min(Math.max(score, 0.3), 0.9),
-      reason: '快速评估中...',
-      isQuick: true
+      reason: reasons.join(' | ') || '一般任务'
     };
   }
   
-  /**
-   * 深度评估 - 异步重新计算
-   */
-  deepAnalyze(text) {
-    let score = 0.5;
-    const lowerText = text.toLowerCase();
-    const reasons = [];
-    
-    // 1. 时间复利
-    const timeWords = ['学习', '读书', '技能', '提升', '成长', '习惯', '健康', '理财'];
-    let timeScore = 0;
-    timeWords.forEach(w => { if (lowerText.includes(w)) timeScore += 0.15; });
-    if (timeScore > 0) { score += Math.min(timeScore, 0.3); reasons.push('💡 时间复利'); }
-    
-    // 2. 边际收益
-    const marginWords = ['产品', '系统', '流程', '自动化', '品牌', '平台'];
-    let marginScore = 0;
-    marginWords.forEach(w => { if (lowerText.includes(w)) marginScore += 0.12; });
-    if (marginScore > 0) { score += Math.min(marginScore, 0.25); reasons.push('🛠️ 边际收益'); }
-    
-    // 3. 网络效应
-    const networkWords = ['团队', '合作', '培训', '分享', '传承', '文档'];
-    let networkScore = 0;
-    networkWords.forEach(w => { if (lowerText.includes(w)) networkScore += 0.1; });
-    if (networkScore > 0) { score += Math.min(networkScore, 0.2); reasons.push('👥 网络效应'); }
-    
-    // 4. 杠杆效应 - 扩展更多商业术语
-    const leverageWords = ['战略', '决策', '规划', '融资', '并购', '上市', 'ipo', '扩张', '规模化'];
-    let leverageScore = 0;
-    leverageWords.forEach(w => { if (lowerText.includes(w)) leverageScore += 0.18; });
-    if (leverageScore > 0) { score += Math.min(leverageScore, 0.35); reasons.push('🎯 杠杆效应'); }
-    
-    // 5. 投资/金融相关 - 高价值活动
-    const financeWords = ['投资', '估值', '尽调', '尽职调查', '审计', '风控', '合规', '法务', '合同', '协议'];
-    let financeScore = 0;
-    financeWords.forEach(w => { if (lowerText.includes(w)) financeScore += 0.2; });
-    if (financeScore > 0) { score += Math.min(financeScore, 0.4); reasons.push('💰 金融/投资'); }
-    
-    // 6. 商业关键活动
-    const businessWords = ['谈判', '签约', '合作', '客户', '订单', '收入', '利润', '成本', '预算'];
-    let businessScore = 0;
-    businessWords.forEach(w => { if (lowerText.includes(w)) businessScore += 0.15; });
-    if (businessScore > 0) { score += Math.min(businessScore, 0.3); reasons.push('💼 商业关键'); }
-    
-    // 7. 紧急程度
-    const urgentWords = ['紧急', '马上', '立刻', 'deadline', '截止', '今天', '明天'];
-    let urgentScore = 0;
-    urgentWords.forEach(w => { if (lowerText.includes(w)) urgentScore += 0.12; });
-    if (urgentScore > 0) { score += Math.min(urgentScore, 0.25); reasons.push('⏰ 紧急'); }
-    
-    // 8. 负面复利（减分）
-    const negativeWords = ['琐事', '重复', '机械', '无意义', '内耗', '扯皮', '推诿'];
-    negativeWords.forEach(w => { if (lowerText.includes(w)) score -= 0.2; });
-    
-    // 9. 任务类型判断
-    if (/会议|开会|讨论/.test(text) && !/决策|确定|融资|并购|战略/.test(text)) {
-      score -= 0.1;
-      if (reasons.length === 0) reasons.push('⚠️ 低产出会议');
-    }
-    
-    if (/回复|确认|知悉/.test(text) && !/融资|并购|合同|协议/.test(text)) {
-      score -= 0.1;
-    }
-    
-    if (/思考|规划|设计|架构|尽调|审计/.test(text)) {
-      score += 0.1;
-    }
-    
-    return { score: Math.min(Math.max(score, 0.1), 1), reason: reasons.join(' | ') || '一般任务', isQuick: false };
-  }
-  
   getColorByImportance(importance) {
-    // 8级颜色梯度，从灰到红
-    if (importance > 0.9) return { r: 255, g: 50, b: 50 };    // 深红 - 极高复利
-    if (importance > 0.8) return { r: 255, g: 80, b: 60 };    // 红橙
-    if (importance > 0.7) return { r: 255, g: 120, b: 70 };   // 橙红
-    if (importance > 0.6) return { r: 255, g: 160, b: 80 };   // 橙色
-    if (importance > 0.5) return { r: 255, g: 200, b: 100 };  // 黄橙
-    if (importance > 0.4) return { r: 255, g: 230, b: 150 };  // 黄色
-    if (importance > 0.3) return { r: 150, g: 220, b: 255 };  // 浅蓝
-    if (importance > 0.2) return { r: 120, g: 180, b: 220 };  // 蓝色
-    return { r: 140, g: 140, b: 160 };                        // 灰蓝 - 极低
+    if (importance > 0.9) return { r: 255, g: 50, b: 50 };
+    if (importance > 0.8) return { r: 255, g: 80, b: 60 };
+    if (importance > 0.7) return { r: 255, g: 120, b: 70 };
+    if (importance > 0.6) return { r: 255, g: 160, b: 80 };
+    if (importance > 0.5) return { r: 255, g: 200, b: 100 };
+    if (importance > 0.4) return { r: 255, g: 230, b: 150 };
+    if (importance > 0.3) return { r: 150, g: 220, b: 255 };
+    if (importance > 0.2) return { r: 120, g: 180, b: 220 };
+    return { r: 140, g: 140, b: 160 };
   }
   
-  addTodo() {
+  async addTodo() {
     const input = document.getElementById('todoInput');
     const text = input.value.trim();
     if (!text) return;
     
-    const quickAnalysis = this.quickAnalyze(text);
-    const radius = 20 + Math.pow(quickAnalysis.score, 2) * 100; // 指数增长，区分度更大
+    const btn = document.getElementById('addBtn');
+    btn.textContent = '...';
+    btn.disabled = true;
+    
+    // 优先使用 AI 分析
+    let analysis = await this.analyzeWithAI(text);
+    
+    // AI 失败则使用本地分析
+    if (!analysis) {
+      analysis = this.localAnalyze(text);
+    }
+    
+    const radius = 20 + Math.pow(analysis.score, 2) * 100;
     
     const todo = {
-      id: Date.now(), text, importance: quickAnalysis.score, targetImportance: quickAnalysis.score,
-      reason: quickAnalysis.reason, radius, targetRadius: radius,
-      x: this.centerX + (Math.random() - 0.5) * 100, y: this.centerY + (Math.random() - 0.5) * 100,
-      vx: 0, vy: 0, color: this.getColorByImportance(quickAnalysis.score),
-      done: false, opacity: 1, scale: 1, isAnalyzing: true
+      id: Date.now(),
+      text: text,
+      importance: analysis.score,
+      targetImportance: analysis.score,
+      reason: analysis.reason,
+      radius: radius,
+      targetRadius: radius,
+      x: this.centerX + (Math.random() - 0.5) * 200,
+      y: this.centerY + (Math.random() - 0.5) * 200,
+      vx: 0, vy: 0,
+      color: this.getColorByImportance(analysis.score),
+      done: false, opacity: 1, scale: 1,
+      isAnalyzing: false
     };
     
     this.todos.push(todo);
     this.saveTodos();
     input.value = '';
-    
-    setTimeout(() => {
-      const deepAnalysis = this.deepAnalyze(text);
-      todo.targetImportance = deepAnalysis.score;
-      todo.targetRadius = 20 + Math.pow(deepAnalysis.score, 2) * 100;
-      todo.reason = deepAnalysis.reason;
-      todo.color = this.getColorByImportance(deepAnalysis.score);
-      todo.isAnalyzing = false;
-      this.saveTodos();
-    }, 500);
-  }
-  
-  updateTodoSize(todo) {
-    if (Math.abs(todo.radius - todo.targetRadius) > 0.5) {
-      todo.radius += (todo.targetRadius - todo.radius) * 0.1;
-      return true;
-    }
-    todo.radius = todo.targetRadius;
-    todo.importance = todo.targetImportance;
-    return false;
+    btn.textContent = '+';
+    btn.disabled = false;
   }
   
   saveTodos() {
-    // 只保存文本内容，每次加载时重新评估
     localStorage.setItem('bubbleTodos', JSON.stringify(this.todos.filter(t => !t.done).map(t => t.text)));
   }
-
-  loadTodos() {
+  
+  async loadTodos() {
     const saved = localStorage.getItem('bubbleTodos');
     if (saved) {
       const texts = JSON.parse(saved);
-      // 重新评估每个待办的重要度
-      texts.forEach(text => {
+      for (const text of texts) {
         if (typeof text === 'string') {
-          const analysis = this.deepAnalyze(text);
+          // 重新用 AI 评估
+          let analysis = await this.analyzeWithAI(text);
+          if (!analysis) analysis = this.localAnalyze(text);
+          
           const radius = 20 + Math.pow(analysis.score, 2) * 100;
           this.todos.push({
             id: Date.now() + Math.random(),
@@ -283,8 +221,18 @@ class BubbleTodo {
             isAnalyzing: false
           });
         }
-      });
+      }
     }
+  }
+  
+  updateTodoSize(todo) {
+    if (Math.abs(todo.radius - todo.targetRadius) > 0.5) {
+      todo.radius += (todo.targetRadius - todo.radius) * 0.1;
+      return true;
+    }
+    todo.radius = todo.targetRadius;
+    todo.importance = todo.targetImportance;
+    return false;
   }
   
   getTodoAt(x, y) {
@@ -321,9 +269,6 @@ class BubbleTodo {
     this.saveTodos();
   }
   
-  /**
-   * 物理引擎 - 重要性居中 + 相关度聚类
-   */
   updatePhysics() {
     this.todos.forEach(todo => { if (!todo.done) this.updateTodoSize(todo); });
     
@@ -333,13 +278,12 @@ class BubbleTodo {
       
       let fx = 0, fy = 0;
       
-      // 1. 中心引力 - 重要性越高，引力越强（趋向中心）
-      // 重要性 0.1-1.0 对应引力系数 0.0001-0.001
+      // 重要性越高中引力越强
       const centerForce = this.centerAttraction * (0.5 + todo.importance * 1.5);
       fx += (this.centerX - todo.x) * centerForce;
       fy += (this.centerY - todo.y) * centerForce;
       
-      // 2. 与其他事项的相互作用（基于相关度）
+      // 与其他事项的相互作用
       for (let j = 0; j < this.todos.length; j++) {
         if (i === j) continue;
         const other = this.todos[j];
@@ -350,10 +294,7 @@ class BubbleTodo {
         const dist = Math.sqrt(dx * dx + dy * dy);
         if (dist === 0) continue;
         
-        // 计算相关度
-        const relevance = this.calculateRelevance(todo, other);
-        
-        // 基础斥力（防止重叠）- 所有气泡之间都有
+        // 防止重叠
         const minDist = todo.radius + other.radius + 15;
         if (dist < minDist) {
           const repulsionForce = this.repulsionBase / (dist * dist + 1);
@@ -361,37 +302,15 @@ class BubbleTodo {
           fy -= (dy / dist) * repulsionForce;
         }
         
-        // 基于相关度的聚类引力
-        if (relevance > 0.2) {
-          // 相关度越高，吸引力越强，目标距离越近
-          // 高相关度 (0.8-1.0): 目标距离 30-60px，强吸引
-          // 中相关度 (0.4-0.7): 目标距离 60-100px，中等吸引
-          // 低相关度 (0.2-0.3): 目标距离 100-150px，弱吸引
-          const targetDist = 150 - relevance * 120; // 30-150px
-          
-          if (dist > targetDist) {
-            // 距离过远时吸引
-            const attractionStrength = this.attractionBase * relevance * 2;
-            const attractionForce = attractionStrength * (dist - targetDist);
-            fx += (dx / dist) * attractionForce;
-            fy += (dy / dist) * attractionForce;
-          } else if (dist < targetDist * 0.7) {
-            // 距离过近时轻微排斥（保持呼吸空间）
-            const breathingRoom = (targetDist * 0.7 - dist) * 0.01;
-            fx -= (dx / dist) * breathingRoom;
-            fy -= (dy / dist) * breathingRoom;
-          }
-        } else {
-          // 低相关度 → 保持较远距离
-          if (dist < 200) {
-            const separationForce = this.repulsionBase * 0.3 / (dist * dist + 1);
-            fx -= (dx / dist) * separationForce;
-            fy -= (dy / dist) * separationForce;
-          }
+        // 重要性相近的事项相互吸引（聚类）
+        const importanceDiff = Math.abs(todo.importance - other.importance);
+        if (importanceDiff < 0.2 && dist > 80) {
+          const attractionForce = this.attractionBase * (1 - importanceDiff) * (dist - 80);
+          fx += (dx / dist) * attractionForce;
+          fy += (dy / dist) * attractionForce;
         }
       }
       
-      // 应用力
       todo.vx += fx;
       todo.vy += fy;
       todo.vx *= this.friction;
@@ -399,7 +318,6 @@ class BubbleTodo {
       todo.x += todo.vx;
       todo.y += todo.vy;
       
-      // 边界限制（软性）
       const margin = todo.radius + 20;
       if (todo.x < margin) { todo.x = margin; todo.vx *= -0.5; }
       if (todo.x > this.canvas.width - margin) { todo.x = this.canvas.width - margin; todo.vx *= -0.5; }
@@ -407,7 +325,6 @@ class BubbleTodo {
       if (todo.y > this.canvas.height - margin) { todo.y = this.canvas.height - margin; todo.vy *= -0.5; }
     }
     
-    // 更新粒子
     for (let i = this.particles.length - 1; i >= 0; i--) {
       const p = this.particles[i];
       p.x += p.vx; p.y += p.vy; p.vy += 0.1; p.life -= 0.02;
@@ -418,33 +335,10 @@ class BubbleTodo {
   render() {
     this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
     
-    // 绘制相关度连线（高相关度的事项之间）
-    this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
-    this.ctx.lineWidth = 1;
-    for (let i = 0; i < this.todos.length; i++) {
-      for (let j = i + 1; j < this.todos.length; j++) {
-        const todo1 = this.todos[i];
-        const todo2 = this.todos[j];
-        if (todo1.done || todo2.done) continue;
-        
-        const relevance = this.calculateRelevance(todo1, todo2);
-        if (relevance > 0.5) {
-          this.ctx.globalAlpha = relevance * 0.3;
-          this.ctx.beginPath();
-          this.ctx.moveTo(todo1.x, todo1.y);
-          this.ctx.lineTo(todo2.x, todo2.y);
-          this.ctx.stroke();
-        }
-      }
-    }
-    this.ctx.globalAlpha = 1;
-    
-    // 绘制气泡
     for (const todo of this.todos) {
       if (todo.done && todo.opacity <= 0) continue;
       const r = todo.radius * todo.scale;
       
-      // 气泡主体
       const gradient = this.ctx.createRadialGradient(
         todo.x - r * 0.3, todo.y - r * 0.3, 0,
         todo.x, todo.y, r
@@ -457,24 +351,12 @@ class BubbleTodo {
       this.ctx.arc(todo.x, todo.y, r, 0, Math.PI * 2);
       this.ctx.fill();
       
-      // 分析中动画
-      if (todo.isAnalyzing) {
-        this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
-        this.ctx.lineWidth = 2;
-        this.ctx.beginPath();
-        this.ctx.arc(todo.x, todo.y, r + 5, 0, Math.PI * 2);
-        this.ctx.stroke();
-      }
-      
-      // 高光
       this.ctx.fillStyle = `rgba(255, 255, 255, ${0.3 * todo.opacity})`;
       this.ctx.beginPath();
       this.ctx.arc(todo.x - r * 0.3, todo.y - r * 0.3, r * 0.2, 0, Math.PI * 2);
       this.ctx.fill();
       
-      // 文字 - 字体大小与气泡半径成正比
       this.ctx.fillStyle = `rgba(255, 255, 255, ${todo.opacity})`;
-      // 字体大小：最小14px，最大根据半径计算 (r * 0.25)，确保大气泡有大字体
       const fontSize = Math.max(14, Math.min(r * 0.25, 32));
       this.ctx.font = `${fontSize}px sans-serif`;
       this.ctx.textAlign = 'center';
@@ -498,7 +380,6 @@ class BubbleTodo {
         this.ctx.fillText(line, todo.x, startY + index * lineHeight);
       });
       
-      // 原因 - 字体也随气泡大小调整
       if (todo.reason && r > 40) {
         this.ctx.fillStyle = `rgba(255, 255, 255, ${0.6 * todo.opacity})`;
         const reasonFontSize = Math.max(10, Math.min(r * 0.12, 16));
@@ -507,7 +388,6 @@ class BubbleTodo {
       }
     }
     
-    // 粒子
     for (const p of this.particles) {
       this.ctx.fillStyle = `rgba(${p.color.r}, ${p.color.g}, ${p.color.b}, ${p.life})`;
       this.ctx.beginPath();
