@@ -793,8 +793,8 @@ ${tasksText}
       }
       
       // 4. 阻尼 - 增大以更快稳定
-      todo.vx *= 0.85;
-      todo.vy *= 0.85;
+      todo.vx *= 0.8;
+      todo.vy *= 0.8;
       
       // 5. 速度很小时归零（静止阈值）
       if (speed < 0.1) {
