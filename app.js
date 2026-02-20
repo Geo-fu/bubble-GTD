@@ -23,9 +23,9 @@ class BubbleTodo {
     this.canvas.addEventListener('touchend', () => this.handleEnd());
     this.canvas.addEventListener('mousedown', (e) => this.handleStart(e.clientX, e.clientY));
     this.canvas.addEventListener('mouseup', () => this.handleEnd());
-    document.getElementById('addBtn').addEventListener('click', () => this.addTodo());
-    document.getElementById('todoInput').addEventListener('keypress', (e) => {
-      if (e.key === 'Enter') this.addTodo();
+    document.getElementById('addBtn').addEventListener('click', async () => await this.addTodo());
+    document.getElementById('todoInput').addEventListener('keypress', async (e) => {
+      if (e.key === 'Enter') await this.addTodo();
     });
     
     // 加载保存的待办
