@@ -40,6 +40,11 @@ class BubbleTodo {
     this.aiCache = new Map();
     this.loadCache();
     
+    // API 限流控制
+    this.apiQueue = [];
+    this.apiProcessing = false;
+    this.apiDelay = 1000; // 请求间隔 1 秒
+    
     this.init();
   }
   
@@ -184,7 +189,7 @@ class BubbleTodo {
   }
   
   /**
-   * 调用 Kimi API 进行智能语义分析（带缓存）
+   * 调用 Kimi API 进行智能语义分析（带缓存和限流）
    */
   async analyzeWithAI(text) {
     const cacheKey = text.trim().toLowerCase();
@@ -193,49 +198,96 @@ class BubbleTodo {
       return this.aiCache.get(cacheKey);
     }
     
-    try {
-      const response = await fetch('https://api.moonshot.cn/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${this.apiKey}`
-        },
-        body: JSON.stringify({
-          model: 'kimi-k2.5',
-          messages: [{
-            role: 'system',
-            content: `你是一个专业的任务重要性分析专家，基于复利思维评估任务。请以JSON返回：{"score": 0.85, "reason": "💰 金融高价值"}`
-          }, {
-            role: 'user',
-            content: `分析："${text}"`
-          }],
-          temperature: 0.3,
-          max_tokens: 100
-        })
-      });
-      
-      if (!response.ok) throw new Error('API error');
-      
-      const data = await response.json();
-      const content = data.choices[0].message.content;
-      
-      const match = content.match(/\{[\s\S]*\}/);
-      if (match) {
-        const result = JSON.parse(match[0]);
-        const analysis = {
-          score: Math.min(Math.max(result.score, 0.1), 1),
-          reason: result.reason || 'AI评估'
-        };
-        
-        this.aiCache.set(cacheKey, analysis);
-        this.saveCache();
-        
-        return analysis;
+    // 加入队列
+    return new Promise((resolve) => {
+      this.apiQueue.push({ text, cacheKey, resolve });
+      this.processApiQueue();
+    });
+  }
+  
+  async processApiQueue() {
+    if (this.apiProcessing || this.apiQueue.length === 0) return;
+    
+    this.apiProcessing = true;
+    const { text, cacheKey, resolve } = this.apiQueue.shift();
+    
+    let retries = 3;
+    let result = null;
+    
+    while (retries > 0) {
+      try {
+        result = await this.callKimiAPI(text);
+        if (result) break;
+      } catch (e) {
+        if (e.message.includes('429')) {
+          console.log('Rate limited, waiting...');
+          await this.sleep(2000 * (4 - retries)); // 递增等待
+        }
       }
-    } catch (e) {
-      console.log('AI analysis failed:', e);
+      retries--;
+    }
+    
+    // 如果 API 失败，使用本地分析
+    if (!result) {
+      result = this.localAnalyze(text);
+    }
+    
+    // 缓存结果
+    this.aiCache.set(cacheKey, result);
+    this.saveCache();
+    
+    resolve(result);
+    
+    this.apiProcessing = false;
+    
+    // 延迟处理下一个请求
+    await this.sleep(this.apiDelay);
+    this.processApiQueue();
+  }
+  
+  async callKimiAPI(text) {
+    const response = await fetch('https://api.moonshot.cn/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${this.apiKey}`
+      },
+      body: JSON.stringify({
+        model: 'kimi-k2.5',
+        messages: [{
+          role: 'system',
+          content: `你是一个任务重要性分析专家。请以JSON返回：{"score": 0.85, "reason": "💰 金融高价值"}`
+        }, {
+          role: 'user',
+          content: `分析："${text}"`
+        }],
+        temperature: 0.3,
+        max_tokens: 80
+      })
+    });
+    
+    if (response.status === 429) {
+      throw new Error('429 Rate limited');
+    }
+    
+    if (!response.ok) return null;
+    
+    const data = await response.json();
+    const content = data.choices[0].message.content;
+    
+    const match = content.match(/\{[\s\S]*\}/);
+    if (match) {
+      const result = JSON.parse(match[0]);
+      return {
+        score: Math.min(Math.max(result.score, 0.1), 1),
+        reason: result.reason || 'AI评估'
+      };
     }
     return null;
+  }
+  
+  sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
   }
   
   /**
