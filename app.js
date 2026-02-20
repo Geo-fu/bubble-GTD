@@ -141,8 +141,8 @@ class BubbleTodo {
               reason: data.reason || '一般任务',
               radius: radius,
               targetRadius: radius,
-              x: this.centerX + (Math.random() - 0.5) * 200,
-              y: this.centerY + (Math.random() - 0.5) * 200,
+              x: isFinite(this.centerX) ? this.centerX + (Math.random() - 0.5) * 200 : 200,
+              y: isFinite(this.centerY) ? this.centerY + (Math.random() - 0.5) * 200 : 200,
               vx: 0, vy: 0,
               color: colorConfig?.bg || { r: 100, g: 100, b: 100 },
               textColor: colorConfig?.text || '#fff',
@@ -536,8 +536,8 @@ ${tasksText}
       reason: quickAnalysis.reason + ' (分析中...)',
       radius: radius,
       targetRadius: radius,
-      x: this.centerX + (Math.random() - 0.5) * 200,
-      y: this.centerY + (Math.random() - 0.5) * 200,
+      x: isFinite(this.centerX) ? this.centerX + (Math.random() - 0.5) * 200 : 200,
+      y: isFinite(this.centerY) ? this.centerY + (Math.random() - 0.5) * 200 : 200,
       vx: 0, vy: 0,
       color: colorConfig.bg,
       textColor: colorConfig.text,
@@ -636,6 +636,14 @@ ${tasksText}
   }
   
   updateTodoSize(todo) {
+    // 确保 targetRadius 是有效数字
+    if (!isFinite(todo.targetRadius) || todo.targetRadius <= 0) {
+      todo.targetRadius = 20;
+    }
+    if (!isFinite(todo.radius) || todo.radius <= 0) {
+      todo.radius = todo.targetRadius;
+    }
+    
     if (Math.abs(todo.radius - todo.targetRadius) > 0.5) {
       todo.radius += (todo.targetRadius - todo.radius) * 0.1;
       return true;
@@ -702,7 +710,7 @@ ${tasksText}
         const dx = other.x - todo.x;
         const dy = other.y - todo.y;
         const dist = Math.sqrt(dx * dx + dy * dy);
-        if (dist === 0) continue;
+        if (!isFinite(dist) || dist === 0) continue;
         
         // 计算任务间相关性（与重要性无关）
         const relation = this.getTaskRelation(todo, other);
@@ -752,7 +760,7 @@ ${tasksText}
       // 速度限制 - 防止过快移动导致震荡
       const maxSpeed = 8;
       const speed = Math.sqrt(todo.vx * todo.vx + todo.vy * todo.vy);
-      if (speed > maxSpeed) {
+      if (speed > maxSpeed && speed > 0) {
         todo.vx = (todo.vx / speed) * maxSpeed;
         todo.vy = (todo.vy / speed) * maxSpeed;
       }
@@ -767,6 +775,12 @@ ${tasksText}
       todo.vy *= this.friction;
       todo.x += todo.vx;
       todo.y += todo.vy;
+      
+      // 防止 NaN 传播
+      if (!isFinite(todo.x)) todo.x = this.centerX;
+      if (!isFinite(todo.y)) todo.y = this.centerY;
+      if (!isFinite(todo.vx)) todo.vx = 0;
+      if (!isFinite(todo.vy)) todo.vy = 0;
       
       const margin = todo.radius + 20;
       if (todo.x < margin) { todo.x = margin; todo.vx *= -0.5; }
