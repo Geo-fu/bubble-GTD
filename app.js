@@ -67,6 +67,8 @@ class BubbleTodo {
         const id = doc.id;
         currentIds.add(id);
         
+        console.log('[BubbleGTD] Processing doc:', id, data.text, 'localIds:', this.localIds.has(id));
+        
         // 检查是否已存在
         const existingIndex = this.todos.findIndex(t => t.id === id);
         
@@ -75,28 +77,30 @@ class BubbleTodo {
           // 跳过本地已添加的（避免重复）
           if (this.localIds.has(id)) {
             this.localIds.delete(id);
-            return;
+            console.log('[BubbleGTD] Skipped local id:', id);
+          } else {
+            // 从 Firebase 加载的新文档
+            console.log('[BubbleGTD] Adding from Firebase:', id, data.text);
+            const colorConfig = this.getColorByImportance(data.importance);
+            const radius = 20 + Math.pow(data.importance, 2) * 100;
+            
+            this.todos.push({
+              id: id,
+              text: data.text,
+              importance: data.importance,
+              targetImportance: data.importance,
+              reason: data.reason,
+              radius: radius,
+              targetRadius: radius,
+              x: this.centerX + (Math.random() - 0.5) * 200,
+              y: this.centerY + (Math.random() - 0.5) * 200,
+              vx: 0, vy: 0,
+              color: colorConfig.bg,
+              textColor: colorConfig.text,
+              done: false, opacity: 1, scale: 1,
+              isAnalyzing: false
+            });
           }
-          
-          const colorConfig = this.getColorByImportance(data.importance);
-          const radius = 20 + Math.pow(data.importance, 2) * 100;
-          
-          this.todos.push({
-            id: id,
-            text: data.text,
-            importance: data.importance,
-            targetImportance: data.importance,
-            reason: data.reason,
-            radius: radius,
-            targetRadius: radius,
-            x: this.centerX + (Math.random() - 0.5) * 200,
-            y: this.centerY + (Math.random() - 0.5) * 200,
-            vx: 0, vy: 0,
-            color: colorConfig.bg,
-            textColor: colorConfig.text,
-            done: false, opacity: 1, scale: 1,
-            isAnalyzing: false
-          });
         } else {
           // 已存在 - 更新数据（AI分析结果等）
           const todo = this.todos[existingIndex];
