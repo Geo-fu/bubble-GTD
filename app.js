@@ -30,7 +30,7 @@ class BubbleTodo {
     
     // 物理参数
     this.repulsionBase = 400;  // 增加排斥力，让气泡距离更远
-    this.attractionBase = 0.0005;  // 稍微减小吸引力
+    this.attractionBase = 0.002;  // 增大相关性吸引力
     
     // 任务间相关性数据（由 Gemini 分析）
     this.relations = [];
@@ -651,14 +651,14 @@ ${tasksText}
         
         // 相关性引力/斥力 - 更温和的力
         // 相关性高 (>0.6) = 吸引，相关性低 (<0.4) = 排斥
-        if (relation > 0.6 && dist > minDist && dist < 300) {
-          // 高相关性吸引 - 距离越近吸引力越小
-          const attractionForce = this.attractionBase * relation * (300 - dist) * 0.3;
+        if (relation > 0.6 && dist > minDist && dist < 400) {
+          // 高相关性吸引 - 增大吸引力
+          const attractionForce = this.attractionBase * relation * (400 - dist) * 0.8;
           fx += (dx / dist) * attractionForce;
           fy += (dy / dist) * attractionForce;
         } else if (relation < 0.4 && dist < 150) {
           // 低相关性排斥 - 更温和
-          const repulsionForce = this.repulsionBase * 0.2 * (150 - dist) / 150;
+          const repulsionForce = this.repulsionBase * 0.15 * (150 - dist) / 150;
           fx -= (dx / dist) * repulsionForce;
           fy -= (dy / dist) * repulsionForce;
         }
