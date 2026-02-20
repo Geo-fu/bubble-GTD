@@ -259,7 +259,7 @@ class BubbleTodo {
   }
   
   /**
-   * 物理引擎 - 包含相关度的引力和斥力
+   * 物理引擎 - 重要性居中 + 相关度聚类
    */
   updatePhysics() {
     this.todos.forEach(todo => { if (!todo.done) this.updateTodoSize(todo); });
@@ -270,9 +270,11 @@ class BubbleTodo {
       
       let fx = 0, fy = 0;
       
-      // 1. 中心引力（防止飘出屏幕）
-      fx += (this.centerX - todo.x) * this.centerAttraction;
-      fy += (this.centerY - todo.y) * this.centerAttraction;
+      // 1. 中心引力 - 重要性越高，引力越强（趋向中心）
+      // 重要性 0.1-1.0 对应引力系数 0.0001-0.001
+      const centerForce = this.centerAttraction * (0.5 + todo.importance * 1.5);
+      fx += (this.centerX - todo.x) * centerForce;
+      fy += (this.centerY - todo.y) * centerForce;
       
       // 2. 与其他事项的相互作用（基于相关度）
       for (let j = 0; j < this.todos.length; j++) {
@@ -283,34 +285,45 @@ class BubbleTodo {
         const dx = other.x - todo.x;
         const dy = other.y - todo.y;
         const dist = Math.sqrt(dx * dx + dy * dy);
-        if (dist === 0 || dist > 300) continue; // 距离太远忽略
+        if (dist === 0) continue;
         
         // 计算相关度
         const relevance = this.calculateRelevance(todo, other);
         
-        // 基础斥力（防止重叠）
-        const minDist = todo.radius + other.radius + 10;
+        // 基础斥力（防止重叠）- 所有气泡之间都有
+        const minDist = todo.radius + other.radius + 15;
         if (dist < minDist) {
-          const repulsionForce = this.repulsionBase / (dist * dist);
+          const repulsionForce = this.repulsionBase / (dist * dist + 1);
           fx -= (dx / dist) * repulsionForce;
           fy -= (dy / dist) * repulsionForce;
         }
         
-        // 基于相关度的引力和斥力
-        if (relevance > this.relevanceThreshold) {
-          // 高相关度 → 相互吸引（距离适中）
-          const targetDist = 100 + (1 - relevance) * 100; // 相关度越高，目标距离越近
+        // 基于相关度的聚类引力
+        if (relevance > 0.2) {
+          // 相关度越高，吸引力越强，目标距离越近
+          // 高相关度 (0.8-1.0): 目标距离 30-60px，强吸引
+          // 中相关度 (0.4-0.7): 目标距离 60-100px，中等吸引
+          // 低相关度 (0.2-0.3): 目标距离 100-150px，弱吸引
+          const targetDist = 150 - relevance * 120; // 30-150px
+          
           if (dist > targetDist) {
-            const attractionForce = this.attractionBase * relevance * (dist - targetDist);
+            // 距离过远时吸引
+            const attractionStrength = this.attractionBase * relevance * 2;
+            const attractionForce = attractionStrength * (dist - targetDist);
             fx += (dx / dist) * attractionForce;
             fy += (dy / dist) * attractionForce;
+          } else if (dist < targetDist * 0.7) {
+            // 距离过近时轻微排斥（保持呼吸空间）
+            const breathingRoom = (targetDist * 0.7 - dist) * 0.01;
+            fx -= (dx / dist) * breathingRoom;
+            fy -= (dy / dist) * breathingRoom;
           }
         } else {
-          // 低相关度 → 相互排斥（距离过近时）
-          if (dist < 150) {
-            const lowRelevanceRepulsion = this.repulsionBase * 0.5 * (1 - relevance) / (dist * dist);
-            fx -= (dx / dist) * lowRelevanceRepulsion;
-            fy -= (dy / dist) * lowRelevanceRepulsion;
+          // 低相关度 → 保持较远距离
+          if (dist < 200) {
+            const separationForce = this.repulsionBase * 0.3 / (dist * dist + 1);
+            fx -= (dx / dist) * separationForce;
+            fy -= (dy / dist) * separationForce;
           }
         }
       }
@@ -323,10 +336,12 @@ class BubbleTodo {
       todo.x += todo.vx;
       todo.y += todo.vy;
       
-      // 边界限制
-      const margin = todo.radius;
-      todo.x = Math.max(margin, Math.min(this.canvas.width - margin, todo.x));
-      todo.y = Math.max(margin, Math.min(this.canvas.height - margin, todo.y));
+      // 边界限制（软性）
+      const margin = todo.radius + 20;
+      if (todo.x < margin) { todo.x = margin; todo.vx *= -0.5; }
+      if (todo.x > this.canvas.width - margin) { todo.x = this.canvas.width - margin; todo.vx *= -0.5; }
+      if (todo.y < margin) { todo.y = margin; todo.vy *= -0.5; }
+      if (todo.y > this.canvas.height - margin) { todo.y = this.canvas.height - margin; todo.vy *= -0.5; }
     }
     
     // 更新粒子
