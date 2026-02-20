@@ -153,12 +153,15 @@ class BubbleTodo {
         } else {
           // 已存在 - 更新数据（AI分析结果等）
           const todo = this.todos[existingIndex];
-          if (todo.importance !== data.importance || todo.reason !== data.reason) {
-            todo.importance = data.importance;
-            todo.targetImportance = data.importance;
-            todo.reason = data.reason;
-            todo.targetRadius = 20 + Math.pow(data.importance, 2) * 100;
-            const colorConfig = this.getColorByImportance(data.importance);
+          const newImportance = typeof data.importance === 'number' ? data.importance : todo.importance;
+          const newReason = data.reason || todo.reason;
+          
+          if (todo.importance !== newImportance || todo.reason !== newReason) {
+            todo.importance = newImportance;
+            todo.targetImportance = newImportance;
+            todo.reason = newReason;
+            todo.targetRadius = 20 + Math.pow(newImportance, 2) * 100;
+            const colorConfig = this.getColorByImportance(newImportance);
             todo.color = colorConfig.bg;
             todo.textColor = colorConfig.text;
           }
@@ -786,10 +789,21 @@ ${tasksText}
       if (todo.done && todo.opacity <= 0) continue;
       const r = todo.radius * todo.scale;
       
-      // 检查无效值
+      // 检查所有渲染需要的值
       if (!isFinite(todo.x) || !isFinite(todo.y) || !isFinite(r) || r <= 0) {
-        console.warn('[BubbleGTD] Invalid render values:', todo.x, todo.y, r);
+        console.warn('[BubbleGTD] Invalid position/radius:', todo.x, todo.y, r);
         continue;
+      }
+      
+      // 检查颜色数据
+      if (!todo.color || typeof todo.color.r !== 'number' || typeof todo.color.g !== 'number' || typeof todo.color.b !== 'number') {
+        console.warn('[BubbleGTD] Invalid color:', todo.color);
+        todo.color = { r: 100, g: 100, b: 100 }; // 默认灰色
+      }
+      
+      // 检查透明度
+      if (typeof todo.opacity !== 'number' || !isFinite(todo.opacity)) {
+        todo.opacity = 1;
       }
       
       const bg = todo.color;
