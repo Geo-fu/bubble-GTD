@@ -492,6 +492,8 @@ ${tasksText}
       return { x: 0, y: this.canvas.height * 0.25 };
     }
   }
+
+  getColorByImportance(importance) {
     if (importance > 0.9) return { bg: { r: 220, g: 53, b: 69 }, text: '#fff' };
     if (importance > 0.8) return { bg: { r: 253, g: 126, b: 20 }, text: '#fff' };
     if (importance > 0.7) return { bg: { r: 255, g: 193, b: 7 }, text: '#212529' };
