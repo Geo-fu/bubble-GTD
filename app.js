@@ -464,7 +464,34 @@ ${tasksText}
     return Math.min(0.5 + matchCount * 0.15, 0.85);
   }
   
-  getColorByImportance(importance) {
+  /**
+   * 根据任务类别返回中心偏移量
+   * 让不同类别向屏幕不同区域聚集
+   */
+  getCategoryOffset(todo) {
+    const text = (todo.text + ' ' + (todo.reason || '')).toLowerCase();
+    
+    // 检测类别
+    const companyWords = ['融资', '投资', '客户', '产品', '团队', '战略', '运营', '销售', '市场', '会议', '财报', '股权', '董事会', '社交', '合作', '谈判'];
+    const personalWords = ['学习', '读书', '技能', '健康', '健身', '运动', '知识', '能力', '成长', '培训', '课程', '证书'];
+    const familyWords = ['家人', '伴侣', '配偶', '孩子', '子女', '父母', '家庭', '家务', '买房', '装修'];
+    
+    let companyScore = companyWords.filter(w => text.includes(w)).length;
+    let personalScore = personalWords.filter(w => text.includes(w)).length;
+    let familyScore = familyWords.filter(w => text.includes(w)).length;
+    
+    // 返回偏移量（将屏幕分为三个区域）
+    if (companyScore >= personalScore && companyScore >= familyScore) {
+      // 公司事务：左上
+      return { x: -this.canvas.width * 0.25, y: -this.canvas.height * 0.2 };
+    } else if (personalScore >= familyScore) {
+      // 个人成长：右上
+      return { x: this.canvas.width * 0.25, y: -this.canvas.height * 0.2 };
+    } else {
+      // 家庭责任：下方
+      return { x: 0, y: this.canvas.height * 0.25 };
+    }
+  }
     if (importance > 0.9) return { bg: { r: 220, g: 53, b: 69 }, text: '#fff' };
     if (importance > 0.8) return { bg: { r: 253, g: 126, b: 20 }, text: '#fff' };
     if (importance > 0.7) return { bg: { r: 255, g: 193, b: 7 }, text: '#212529' };
@@ -649,9 +676,14 @@ ${tasksText}
       
       let fx = 0, fy = 0;
       
-      const centerForce = this.centerAttraction * (0.3 + todo.importance * 0.7);
-      fx += (this.centerX - todo.x) * centerForce;
-      fy += (this.centerY - todo.y) * centerForce;
+      // 根据任务类别施加不同的中心偏移力
+      const categoryOffset = this.getCategoryOffset(todo);
+      const targetX = this.centerX + categoryOffset.x;
+      const targetY = this.centerY + categoryOffset.y;
+      
+      const centerForce = this.centerAttraction * (0.2 + todo.importance * 0.5);
+      fx += (targetX - todo.x) * centerForce;
+      fy += (targetY - todo.y) * centerForce;
       
       for (let j = 0; j < this.todos.length; j++) {
         if (i === j) continue;
@@ -667,27 +699,41 @@ ${tasksText}
         const relation = this.getTaskRelation(todo, other);
         
         // 基础排斥力（防止重叠）
-        const minDist = todo.radius + other.radius + 10;
+        const minDist = todo.radius + other.radius;
         if (dist < minDist) {
-          // 重叠时强排斥，快速分离
-          const overlap = minDist - dist;
-          const repulsionForce = overlap * 2; // 与重叠量成正比
-          fx -= (dx / dist) * repulsionForce;
-          fy -= (dy / dist) * repulsionForce;
+          // 同类别时允许轻微重叠，不同类别时强排斥
+          const relation = this.getTaskRelation(todo, other);
+          if (relation > 0.5) {
+            // 同类别：温和排斥，允许轻微重叠
+            const overlap = minDist - dist;
+            const repulsionForce = overlap * 0.5; // 很温和
+            fx -= (dx / dist) * repulsionForce;
+            fy -= (dy / dist) * repulsionForce;
+          } else {
+            // 不同类别：强排斥，保持距离
+            const overlap = minDist - dist;
+            const repulsionForce = overlap * 3; // 强排斥
+            fx -= (dx / dist) * repulsionForce;
+            fy -= (dy / dist) * repulsionForce;
+          }
         }
         
-        // 相关性引力/斥力 - 快速聚类并稳定
-        // 相关性高 (>0.5) = 吸引，相关性低 (<0.3) = 排斥
-        if (relation > 0.5 && dist > minDist && dist < 400) {
-          // 高相关性吸引 - 使用平滑曲线，距离适中时力最大
-          const optimalDist = minDist + 30; // 最佳距离
-          const distFromOptimal = Math.abs(dist - optimalDist);
-          const attractionForce = this.attractionBase * relation * Math.max(0, 100 - distFromOptimal);
-          fx += (dx / dist) * attractionForce;
-          fy += (dy / dist) * attractionForce;
-        } else if (relation < 0.3 && dist < 200) {
-          // 低相关性排斥 - 短距离强排斥
-          const repulsionForce = this.repulsionBase * 0.3 * (200 - dist) / 200;
+        // 相关性引力/斥力
+        const relation = this.getTaskRelation(todo, other);
+        
+        if (relation > 0.5) {
+          // 同类别强吸引，距离很近时仍保持吸引
+          if (dist > todo.radius * 0.5 && dist < 300) {
+            // 吸引力在近距离时仍然有效
+            const targetDist = todo.radius * 0.8; // 目标距离：轻微重叠
+            const distDiff = dist - targetDist;
+            const attractionForce = this.attractionBase * relation * distDiff * 5;
+            fx += (dx / dist) * attractionForce;
+            fy += (dy / dist) * attractionForce;
+          }
+        } else if (relation < 0.3 && dist < 300) {
+          // 不同类别强排斥，保持距离
+          const repulsionForce = this.repulsionBase * 0.4 * (300 - dist) / 300;
           fx -= (dx / dist) * repulsionForce;
           fy -= (dy / dist) * repulsionForce;
         }
