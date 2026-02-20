@@ -1,6 +1,5 @@
 // Firebase 配置
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-app.js";
-import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-auth.js";
 import { getFirestore, collection, doc, setDoc, deleteDoc, onSnapshot, query, orderBy, serverTimestamp, getDocs } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-firestore.js";
 
 const firebaseConfig = {
@@ -14,7 +13,6 @@ const firebaseConfig = {
 };
 
 const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
 const db = getFirestore(app);
 
 class BubbleTodo {
@@ -27,7 +25,7 @@ class BubbleTodo {
     this.centerAttraction = 0.0003;
     this.touch = { x: 0, y: 0, isDown: false, target: null };
     this.longPressTimer = null;
-    this.userId = null;
+    this.unsubscribe = null;
     this.unsubscribe = null;
     
     // 物理参数
@@ -49,28 +47,12 @@ class BubbleTodo {
       if (e.key === 'Enter') this.addTodo();
     });
     
-    // Firebase 匿名登录
-    this.initAuth();
-  }
-  
-  async initAuth() {
-    // 使用固定的用户 ID 实现跨设备同步
-    // 从 localStorage 获取或生成固定 ID
-    let fixedUserId = localStorage.getItem('bubble-gtd-userid');
-    if (!fixedUserId) {
-      // 生成一个随机的固定 ID
-      fixedUserId = 'user_' + Math.random().toString(36).substring(2, 15);
-      localStorage.setItem('bubble-gtd-userid', fixedUserId);
-    }
-    this.userId = fixedUserId;
-    console.log('User ID:', this.userId);
+    // 直接加载数据，不需要登录
     this.loadTodosFromFirebase();
   }
   
   async loadTodosFromFirebase() {
-    if (!this.userId) return;
-    
-    // 使用简单的集合结构，每个文档包含 userId 字段
+    // 使用简单的集合结构，所有人共享
     const q = query(collection(db, 'todos'), orderBy('createdAt', 'desc'));
     
     // 先获取现有数据
@@ -80,8 +62,6 @@ class BubbleTodo {
       
       snapshot.forEach((doc) => {
         const data = doc.data();
-        // 只加载当前用户的数据
-        if (data.userId !== this.userId) return;
         
         const colorConfig = this.getColorByImportance(data.importance);
         const radius = 20 + Math.pow(data.importance, 2) * 100;
@@ -114,9 +94,6 @@ class BubbleTodo {
       snapshot.docChanges().forEach((change) => {
         const data = change.doc.data();
         const id = change.doc.id;
-        
-        // 只处理当前用户的数据
-        if (data.userId !== this.userId) return;
         
         if (change.type === 'added') {
           if (!this.todos.find(t => t.id === id)) {
@@ -235,7 +212,7 @@ class BubbleTodo {
   async addTodo() {
     const input = document.getElementById('todoInput');
     const text = input.value.trim();
-    if (!text || !this.userId) return;
+    if (!text) return;
     
     const btn = document.getElementById('addBtn');
     btn.textContent = '...';
@@ -268,7 +245,6 @@ class BubbleTodo {
     // 后台同步到 Firebase
     try {
       await setDoc(doc(db, 'todos', id), {
-        userId: this.userId,  // 添加 userId 字段用于过滤
         text: text,
         importance: analysis.score,
         reason: analysis.reason,
@@ -340,12 +316,10 @@ class BubbleTodo {
   async completeTodo(todo) {
     if (todo.done) return;
     
-    if (this.userId) {
-      try {
-        await deleteDoc(doc(db, 'todos', todo.id));
-      } catch (e) {
-        console.error('Delete failed:', e);
-      }
+    try {
+      await deleteDoc(doc(db, 'todos', todo.id));
+    } catch (e) {
+      console.error('Delete failed:', e);
     }
   }
   
