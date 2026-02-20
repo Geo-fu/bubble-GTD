@@ -129,22 +129,23 @@ class BubbleTodo {
           } else {
             // 从 Firebase 加载的新文档
             console.log('[BubbleGTD] Adding from Firebase:', id, data.text);
-            const colorConfig = this.getColorByImportance(data.importance);
-            const radius = 20 + Math.pow(data.importance, 2) * 100;
+            const importance = typeof data.importance === 'number' ? data.importance : 0.5;
+            const colorConfig = this.getColorByImportance(importance);
+            const radius = 20 + Math.pow(importance, 2) * 100;
             
             this.todos.push({
               id: id,
-              text: data.text,
-              importance: data.importance,
-              targetImportance: data.importance,
-              reason: data.reason,
+              text: data.text || '',
+              importance: importance,
+              targetImportance: importance,
+              reason: data.reason || '一般任务',
               radius: radius,
               targetRadius: radius,
               x: this.centerX + (Math.random() - 0.5) * 200,
               y: this.centerY + (Math.random() - 0.5) * 200,
               vx: 0, vy: 0,
-              color: colorConfig.bg,
-              textColor: colorConfig.text,
+              color: colorConfig?.bg || { r: 100, g: 100, b: 100 },
+              textColor: colorConfig?.text || '#fff',
               done: false, opacity: 1, scale: 1,
               isAnalyzing: false
             });
@@ -494,14 +495,17 @@ ${tasksText}
   }
 
   getColorByImportance(importance) {
-    if (importance > 0.9) return { bg: { r: 220, g: 53, b: 69 }, text: '#fff' };
-    if (importance > 0.8) return { bg: { r: 253, g: 126, b: 20 }, text: '#fff' };
-    if (importance > 0.7) return { bg: { r: 255, g: 193, b: 7 }, text: '#212529' };
-    if (importance > 0.6) return { bg: { r: 40, g: 167, b: 69 }, text: '#fff' };
-    if (importance > 0.5) return { bg: { r: 23, g: 162, b: 184 }, text: '#fff' };
-    if (importance > 0.4) return { bg: { r: 0, g: 123, b: 255 }, text: '#fff' };
-    if (importance > 0.3) return { bg: { r: 111, g: 66, b: 193 }, text: '#fff' };
-    if (importance > 0.2) return { bg: { r: 108, g: 117, b: 125 }, text: '#fff' };
+    // 确保 importance 是有效数字
+    const score = typeof importance === 'number' && isFinite(importance) ? importance : 0.5;
+    
+    if (score > 0.9) return { bg: { r: 220, g: 53, b: 69 }, text: '#fff' };
+    if (score > 0.8) return { bg: { r: 253, g: 126, b: 20 }, text: '#fff' };
+    if (score > 0.7) return { bg: { r: 255, g: 193, b: 7 }, text: '#212529' };
+    if (score > 0.6) return { bg: { r: 40, g: 167, b: 69 }, text: '#fff' };
+    if (score > 0.5) return { bg: { r: 23, g: 162, b: 184 }, text: '#fff' };
+    if (score > 0.4) return { bg: { r: 0, g: 123, b: 255 }, text: '#fff' };
+    if (score > 0.3) return { bg: { r: 111, g: 66, b: 193 }, text: '#fff' };
+    if (score > 0.2) return { bg: { r: 108, g: 117, b: 125 }, text: '#fff' };
     return { bg: { r: 73, g: 80, b: 87 }, text: '#fff' };
   }
   
