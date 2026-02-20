@@ -800,10 +800,9 @@ ${tasksText}
         todo.restTime = 0;
       }
       
-      // 阻尼随静止时间增大：0.98 ~ 0.7（阻力较小）
-      const dynamicFriction = Math.max(0.98 - todo.restTime * 0.005, 0.7);
-      todo.vx *= dynamicFriction;
-      todo.vy *= dynamicFriction;
+      // 固定阻尼 0.9
+      todo.vx *= 0.9;
+      todo.vy *= 0.9;
       
       // 5. 速度很小时归零（静止阈值）
       if (speed < 0.1) {
