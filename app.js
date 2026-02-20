@@ -35,6 +35,12 @@ class BubbleTodo {
     // 任务间相关性数据（由 Gemini 分析）
     this.relations = [];
     
+    // 先设置默认中心坐标，避免异步加载时 NaN
+    this.canvas.width = window.innerWidth || 800;
+    this.canvas.height = window.innerHeight || 600;
+    this.centerX = this.canvas.width / 2;
+    this.centerY = this.canvas.height / 2;
+    
     this.init();
   }
   
@@ -141,8 +147,8 @@ class BubbleTodo {
               reason: data.reason || '一般任务',
               radius: radius,
               targetRadius: radius,
-              x: isFinite(this.centerX) ? this.centerX + (Math.random() - 0.5) * 200 : 200,
-              y: isFinite(this.centerY) ? this.centerY + (Math.random() - 0.5) * 200 : 200,
+              x: this.centerX + (Math.random() - 0.5) * 200,
+              y: this.centerY + (Math.random() - 0.5) * 200,
               vx: 0, vy: 0,
               color: colorConfig?.bg || { r: 100, g: 100, b: 100 },
               textColor: colorConfig?.text || '#fff',
@@ -536,8 +542,8 @@ ${tasksText}
       reason: quickAnalysis.reason + ' (分析中...)',
       radius: radius,
       targetRadius: radius,
-      x: isFinite(this.centerX) ? this.centerX + (Math.random() - 0.5) * 200 : 200,
-      y: isFinite(this.centerY) ? this.centerY + (Math.random() - 0.5) * 200 : 200,
+      x: this.centerX + (Math.random() - 0.5) * 200,
+      y: this.centerY + (Math.random() - 0.5) * 200,
       vx: 0, vy: 0,
       color: colorConfig.bg,
       textColor: colorConfig.text,
