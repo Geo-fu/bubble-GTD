@@ -726,15 +726,14 @@ ${tasksText}
       
       let fx = 0, fy = 0;
       
-      // 1. 所有气泡都向质心（或屏幕中心） gently 靠拢
-      // 距离越远，引力越大，但有上限
+      // 1. 所有气泡都向中心靠拢 - 有动态感但不过强
       const dx = this.centerX - todo.x;
       const dy = this.centerY - todo.y;
       const distToCenter = Math.sqrt(dx * dx + dy * dy);
       
-      // 温和的中心引力：只在距离较远时起作用，且力度有上限
-      if (distToCenter > 100) {
-        const attraction = Math.min((distToCenter - 100) * 0.001, 2);
+      // 中心引力：始终作用，随距离增加，5秒内能稳定
+      if (distToCenter > 50) {
+        const attraction = Math.min(distToCenter * 0.003, 4);
         fx += (dx / distToCenter) * attraction;
         fy += (dy / distToCenter) * attraction;
       }
@@ -752,28 +751,32 @@ ${tasksText}
         
         const minDist = todo.radius + other.radius;
         if (dist < minDist) {
-          // 重叠时推开，力度与重叠程度成正比
+          // 重叠时推开，力度适中
           const overlap = minDist - dist;
-          const repulsion = overlap * 0.3; // 温和的排斥
+          const repulsion = overlap * 0.8; // 适中排斥，有动态感
           fx -= (odx / dist) * repulsion;
           fy -= (ody / dist) * repulsion;
         }
       }
       
-      // 3. 应用力和阻尼
-      todo.vx = (todo.vx + fx) * this.friction;
-      todo.vy = (todo.vy + fy) * this.friction;
+      // 3. 应用力
+      todo.vx += fx;
+      todo.vy += fy;
       
-      // 4. 硬速度限制 - 防止任何气泡跑太快
-      const maxSpeed = 5;
+      // 4. 速度限制 - 允许一定速度，有动态感
+      const maxSpeed = 12;
       const speed = Math.sqrt(todo.vx * todo.vx + todo.vy * todo.vy);
       if (speed > maxSpeed) {
         todo.vx = (todo.vx / speed) * maxSpeed;
         todo.vy = (todo.vy / speed) * maxSpeed;
       }
       
-      // 5. 速度很小时归零（静止阈值）
-      if (speed < 0.2) {
+      // 5. 阻尼 - 5秒内稳定
+      todo.vx *= 0.92;
+      todo.vy *= 0.92;
+      
+      // 6. 速度很小时归零（静止阈值）
+      if (speed < 0.15) {
         todo.vx = 0;
         todo.vy = 0;
       }
