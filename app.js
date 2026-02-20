@@ -395,7 +395,7 @@ class BubbleTodo {
       const bg = todo.color;
       
       const gradient = this.ctx.createRadialGradient(
-        todo.x - r * 0.3, todo.y - r * 0.3, 0,
+        todo.x - r * 0.5, todo.y - r * 0.5, 0,
         todo.x, todo.y, r
       );
       gradient.addColorStop(0, `rgba(${Math.min(bg.r + 40, 255)}, ${Math.min(bg.g + 40, 255)}, ${Math.min(bg.b + 40, 255)}, ${todo.opacity})`);
@@ -406,9 +406,10 @@ class BubbleTodo {
       this.ctx.arc(todo.x, todo.y, r, 0, Math.PI * 2);
       this.ctx.fill();
       
-      this.ctx.fillStyle = `rgba(255, 255, 255, ${0.25 * todo.opacity})`;
+      // 光斑效果 - 移到左上角，避免和文字重叠
+      this.ctx.fillStyle = `rgba(255, 255, 255, ${0.2 * todo.opacity})`;
       this.ctx.beginPath();
-      this.ctx.arc(todo.x - r * 0.3, todo.y - r * 0.3, r * 0.2, 0, Math.PI * 2);
+      this.ctx.arc(todo.x - r * 0.5, todo.y - r * 0.5, r * 0.15, 0, Math.PI * 2);
       this.ctx.fill();
       
       const textColor = todo.textColor || '#fff';
