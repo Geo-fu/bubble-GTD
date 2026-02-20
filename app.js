@@ -747,15 +747,36 @@ ${tasksText}
       
       let fx = 0, fy = 0;
       
-      // 1. 只有最大气泡受中心引力
-      if (todo === maxTodo) {
-        const dx = this.centerX - todo.x;
-        const dy = this.centerY - todo.y;
-        const distToCenter = Math.sqrt(dx * dx + dy * dy);
-        if (distToCenter > 0) {
-          const attraction = Math.min(distToCenter * 0.005, 5);
-          fx += (dx / distToCenter) * attraction;
-          fy += (dy / distToCenter) * attraction;
+      // 1. 所有气泡都向中心 gentle 靠拢
+      const dx = this.centerX - todo.x;
+      const dy = this.centerY - todo.y;
+      const distToCenter = Math.sqrt(dx * dx + dy * dy);
+      if (distToCenter > 0) {
+        // 最大气泡引力稍强，其他气泡 gentle 靠拢
+        const strength = (todo === maxTodo) ? 0.005 : 0.002;
+        const attraction = Math.min(distToCenter * strength, 3);
+        fx += (dx / distToCenter) * attraction;
+        fy += (dy / distToCenter) * attraction;
+      }
+      
+      // 2. 温和排斥 - 防止过度重叠，允许轻微重叠
+      for (let j = 0; j < this.todos.length; j++) {
+        if (i === j) continue;
+        const other = this.todos[j];
+        if (other.done) continue;
+        
+        const odx = other.x - todo.x;
+        const ody = other.y - todo.y;
+        const dist = Math.sqrt(odx * odx + ody * ody);
+        if (!isFinite(dist) || dist === 0) continue;
+        
+        // 允许轻微重叠：只有当重叠超过半径的30%时才排斥
+        const minDist = (todo.radius + other.radius) * 0.7;
+        if (dist < minDist) {
+          const overlap = minDist - dist;
+          const repulsion = overlap * 0.4; // 温和排斥
+          fx -= (odx / dist) * repulsion;
+          fy -= (ody / dist) * repulsion;
         }
       }
       
@@ -803,28 +824,59 @@ ${tasksText}
   render() {
     this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
     
+    // 找到最大气泡
+    let maxTodo = null;
+    let maxImportance = -1;
     for (const todo of this.todos) {
+      if (!todo.done && todo.importance > maxImportance) {
+        maxImportance = todo.importance;
+        maxTodo = todo;
+      }
+    }
+    
+    // 先渲染非最大气泡（底层）
+    for (const todo of this.todos) {
+      if (todo === maxTodo) continue;
       if (todo.done && todo.opacity <= 0) continue;
-      const r = todo.radius * todo.scale;
-      
-      // 检查所有渲染需要的值
-      if (!isFinite(todo.x) || !isFinite(todo.y) || !isFinite(r) || r <= 0) {
-        console.warn('[BubbleGTD] Invalid position/radius:', todo.x, todo.y, r);
-        continue;
-      }
-      
-      // 检查颜色数据
-      if (!todo.color || typeof todo.color.r !== 'number' || typeof todo.color.g !== 'number' || typeof todo.color.b !== 'number') {
-        console.warn('[BubbleGTD] Invalid color:', todo.color);
-        todo.color = { r: 100, g: 100, b: 100 }; // 默认灰色
-      }
-      
-      // 检查透明度
-      if (typeof todo.opacity !== 'number' || !isFinite(todo.opacity)) {
-        todo.opacity = 1;
-      }
-      
-      const bg = todo.color;
+      this.renderTodo(todo);
+    }
+    
+    // 最后渲染最大气泡（最上层）
+    if (maxTodo && !maxTodo.done) {
+      this.renderTodo(maxTodo);
+    }
+    
+    // 粒子动画
+    for (const p of this.particles) {
+      const c = p.color;
+      this.ctx.fillStyle = `rgba(${c.r}, ${c.g}, ${c.b}, ${p.life})`;
+      this.ctx.beginPath();
+      this.ctx.arc(p.x, p.y, p.size * p.life, 0, Math.PI * 2);
+      this.ctx.fill();
+    }
+  }
+  
+  renderTodo(todo) {
+    const r = todo.radius * todo.scale;
+    
+    // 检查所有渲染需要的值
+    if (!isFinite(todo.x) || !isFinite(todo.y) || !isFinite(r) || r <= 0) {
+      console.warn('[BubbleGTD] Invalid position/radius:', todo.x, todo.y, r);
+      return;
+    }
+    
+    // 检查颜色数据
+    if (!todo.color || typeof todo.color.r !== 'number' || typeof todo.color.g !== 'number' || typeof todo.color.b !== 'number') {
+      console.warn('[BubbleGTD] Invalid color:', todo.color);
+      todo.color = { r: 100, g: 100, b: 100 }; // 默认灰色
+    }
+    
+    // 检查透明度
+    if (typeof todo.opacity !== 'number' || !isFinite(todo.opacity)) {
+      todo.opacity = 1;
+    }
+    
+    const bg = todo.color;
       
       // 主渐变 - 模拟球体光照
       const gradient = this.ctx.createRadialGradient(
