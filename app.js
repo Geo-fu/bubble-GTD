@@ -32,6 +32,9 @@ class BubbleTodo {
     this.repulsionBase = 400;  // 增加排斥力，让气泡距离更远
     this.attractionBase = 0.0005;  // 稍微减小吸引力
     
+    // 任务间相关性数据（由 Gemini 分析）
+    this.relations = [];
+    
     this.init();
   }
   
@@ -303,91 +306,106 @@ class BubbleTodo {
   }
   
   /**
-   * Gemini API 语义分析
-   * 需要先在 https://ai.google.dev/ 申请 API Key
+   * Gemini API 批量分析 - 同时评估重要性和任务间相关性
+   * 一次性分析所有任务，减少 API 调用
    */
-  async geminiAnalyze(text) {
-    // 使用用户的 API Key
-    let API_KEY = 'AIzaSyDsIFkGLqONEXS3SCOG8rmggAMYkMPcg6c';
+  async geminiAnalyzeAll(todos) {
+    const API_KEY = 'AIzaSyDsIFkGLqONEXS3SCOG8rmggAMYkMPcg6c';
+    
+    // 构建任务列表文本
+    const tasksText = todos.map((t, i) => `${i + 1}. ${t.text}`).join('\n');
     
     try {
       const response = await fetch(
         `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${API_KEY}`,
         {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             contents: [{
               parts: [{
-                text: `分析这个任务的重要性，基于复利思维（时间价值、边际收益、网络效应、杠杆效应）。
+                text: `分析以下任务列表，评估每个任务的重要性（0-1）以及任务之间的相关性（0-1）。
 
-任务："${text}"
+任务列表：
+${tasksText}
 
 请以JSON格式返回：
 {
-  "score": 0.0-1.0,
-  "reason": "简短说明，如：💰 高价值投资决策",
-  "category": "金融/商业/学习/紧急/日常"
+  "tasks": [
+    {"index": 1, "score": 0.85, "reason": "💰 高价值投资", "tags": ["金融", "紧急"]},
+    ...
+  ],
+  "relations": [
+    {"from": 1, "to": 2, "score": 0.8},
+    ...
+  ]
 }
+
+说明：
+- score: 重要性分数，0-1之间
+- relations: 任务间相关性，0-1之间，只返回相关性>0.3的配对
+- 相关性基于任务内容语义相似度（如"融资"和"投资人会议"相关性高）
 
 只返回JSON，不要其他文字。`
               }]
             }],
-            generationConfig: {
-              temperature: 0.3,
-              maxOutputTokens: 150
-            }
+            generationConfig: { temperature: 0.3, maxOutputTokens: 1000 }
           })
         }
       );
       
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        console.error('[BubbleGTD] Gemini API error:', response.status, errorData);
-        throw new Error(`API error: ${response.status}`);
-      }
+      if (!response.ok) throw new Error(`API error: ${response.status}`);
       
       const data = await response.json();
-      
-      if (!data.candidates || !data.candidates[0]) {
-        throw new Error('Invalid response format');
-      }
-      
       const content = data.candidates[0].content.parts[0].text;
       
-      // 解析 JSON
       const jsonMatch = content.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
-        const result = JSON.parse(jsonMatch[0]);
-        return {
-          score: Math.min(Math.max(result.score, 0.1), 1.0),
-          reason: result.reason || result.category || '🤖 AI分析',
-          needsAI: false // 已经是AI分析的结果
-        };
+        return JSON.parse(jsonMatch[0]);
       }
     } catch (e) {
-      console.error('[BubbleGTD] Gemini API failed:', e.message);
+      console.error('[BubbleGTD] Gemini batch analysis failed:', e.message);
     }
-    
-    // 失败时回退到本地分析
-    return this.semanticAnalyze(text);
+    return null;
   }
   
   /**
-   * 本地快速评估（使用语义分析）
+   * 分析单个任务（使用本地分析，批量分析时调用 geminiAnalyzeAll）
    */
   localAnalyze(text) {
     return this.semanticAnalyze(text);
   }
   
   /**
-   * 异步 AI 分析（用于深度分析）
+   * 计算任务间相关性（用于物理引擎）
+   * 基于 Gemini 返回的相关性数据或本地计算
    */
-  async analyzeWithAI(text) {
-    // 优先使用 Gemini
-    return await this.geminiAnalyze(text);
+  getTaskRelation(todo1, todo2) {
+    // 如果有 Gemini 分析的相关性数据，直接使用
+    if (this.relations) {
+      const rel = this.relations.find(r => 
+        (r.from === todo1.id && r.to === todo2.id) ||
+        (r.from === todo2.id && r.to === todo1.id)
+      );
+      if (rel) return rel.score;
+    }
+    
+    // 本地计算相关性：基于标签匹配
+    const text1 = (todo1.text + ' ' + (todo1.reason || '')).toLowerCase();
+    const text2 = (todo2.text + ' ' + (todo2.reason || '')).toLowerCase();
+    
+    // 提取关键词
+    const keywords = ['融资', '投资', '客户', '产品', '团队', '会议', '报告', '分析', '设计', '开发'];
+    let matchCount = 0;
+    
+    for (const kw of keywords) {
+      if (text1.includes(kw) && text2.includes(kw)) {
+        matchCount++;
+      }
+    }
+    
+    // 相关性分数
+    return Math.min(matchCount * 0.3, 0.9);
   }
   
   getColorByImportance(importance) {
@@ -406,19 +424,19 @@ class BubbleTodo {
     const input = document.getElementById('todoInput');
     const text = input.value.trim();
     if (!text) return;
-    
+
     // 先使用本地分析快速显示
     const quickAnalysis = this.localAnalyze(text);
     const id = Date.now().toString();
-    
+
     // 立即本地显示（0.1秒内）
     const colorConfig = this.getColorByImportance(quickAnalysis.score);
     const radius = 20 + Math.pow(quickAnalysis.score, 2) * 100;
-    
+
     // 标记为本地添加，避免 onSnapshot 重复处理
     this.localIds.add(id);
-    
-    this.todos.push({
+
+    const newTodo = {
       id: id,
       text: text,
       importance: quickAnalysis.score,
@@ -433,42 +451,12 @@ class BubbleTodo {
       textColor: colorConfig.text,
       done: false, opacity: 1, scale: 1,
       isAnalyzing: true
-    });
-    
+    };
+
+    this.todos.push(newTodo);
     input.value = '';
-    
-    // 后台使用 Gemini API 深度分析
-    console.log('[BubbleGTD] Starting Gemini analysis...');
-    this.analyzeWithAI(text).then(aiAnalysis => {
-      console.log('[BubbleGTD] Gemini analysis result:', aiAnalysis);
-      
-      // 更新本地气泡
-      const todo = this.todos.find(t => t.id === id);
-      if (todo) {
-        todo.importance = aiAnalysis.score;
-        todo.targetImportance = aiAnalysis.score;
-        todo.reason = aiAnalysis.reason;
-        todo.targetRadius = 20 + Math.pow(aiAnalysis.score, 2) * 100;
-        const newColorConfig = this.getColorByImportance(aiAnalysis.score);
-        todo.color = newColorConfig.bg;
-        todo.textColor = newColorConfig.text;
-        todo.isAnalyzing = false;
-      }
-      
-      // 更新 Firebase
-      setDoc(doc(db, 'todos', id), {
-        text: text,
-        importance: aiAnalysis.score,
-        reason: aiAnalysis.reason,
-        needsAI: false,
-        aiAnalyzed: true,
-        createdAt: serverTimestamp()
-      }).catch(e => console.error('[BubbleGTD] Update failed:', e));
-    }).catch(e => {
-      console.error('[BubbleGTD] Gemini analysis failed:', e);
-    });
-    
-    // 先保存初始数据到 Firebase
+
+    // 保存到 Firebase
     setDoc(doc(db, 'todos', id), {
       text: text,
       importance: quickAnalysis.score,
@@ -477,6 +465,60 @@ class BubbleTodo {
       aiAnalyzed: false,
       createdAt: serverTimestamp()
     }).catch(e => console.error('[BubbleGTD] Save failed:', e));
+
+    // 批量 Gemini 分析（分析所有任务，包括新添加的）
+    if (this.todos.length >= 1) {
+      console.log('[BubbleGTD] Starting batch Gemini analysis...');
+
+      // 延迟执行，等待 Firebase 同步
+      setTimeout(async () => {
+        const allTodos = this.todos.filter(t => !t.done).map((t, idx) => ({
+          index: idx + 1,
+          id: t.id,
+          text: t.text
+        }));
+
+        const result = await this.geminiAnalyzeAll(allTodos);
+
+        if (result && result.tasks) {
+          console.log('[BubbleGTD] Batch analysis complete:', result);
+
+          // 更新所有任务的重要性
+          result.tasks.forEach(task => {
+            const todo = this.todos.find(t => t.id === allTodos[task.index - 1]?.id);
+            if (todo) {
+              todo.importance = task.score;
+              todo.targetImportance = task.score;
+              todo.reason = task.reason;
+              todo.targetRadius = 20 + Math.pow(task.score, 2) * 100;
+              const newColor = this.getColorByImportance(task.score);
+              todo.color = newColor.bg;
+              todo.textColor = newColor.text;
+              todo.isAnalyzing = false;
+
+              // 更新 Firebase
+              setDoc(doc(db, 'todos', todo.id), {
+                text: todo.text,
+                importance: task.score,
+                reason: task.reason,
+                needsAI: false,
+                aiAnalyzed: true,
+                createdAt: serverTimestamp()
+              }).catch(e => console.error('[BubbleGTD] Update failed:', e));
+            }
+          });
+
+          // 保存相关性数据
+          if (result.relations) {
+            this.relations = result.relations.map(r => ({
+              from: allTodos[r.from - 1]?.id,
+              to: allTodos[r.to - 1]?.id,
+              score: r.score
+            })).filter(r => r.from && r.to);
+          }
+        }
+      }, 1000);
+    }
   }
   
   triggerExplosion(todo) {
@@ -564,18 +606,29 @@ class BubbleTodo {
         const dist = Math.sqrt(dx * dx + dy * dy);
         if (dist === 0) continue;
         
-        const minDist = todo.radius + other.radius + 25;  // 增加最小间距（从15到25）
+        // 计算任务间相关性（与重要性无关）
+        const relation = this.getTaskRelation(todo, other);
+        
+        // 基础排斥力（防止重叠）- 与相关性无关
+        const minDist = todo.radius + other.radius + 25;
         if (dist < minDist) {
           const repulsionForce = this.repulsionBase / (dist * dist + 1);
           fx -= (dx / dist) * repulsionForce;
           fy -= (dy / dist) * repulsionForce;
         }
         
-        const importanceDiff = Math.abs(todo.importance - other.importance);
-        if (importanceDiff < 0.2 && dist > 100) {  // 增加吸引力触发距离（从80到100）
-          const attractionForce = this.attractionBase * (1 - importanceDiff) * (dist - 100);
+        // 相关性引力/斥力
+        // 相关性高 (>0.5) = 吸引，相关性低 (<0.3) = 排斥，中间 = 中性
+        if (relation > 0.5 && dist > minDist) {
+          // 高相关性吸引
+          const attractionForce = this.attractionBase * relation * (dist - minDist) * 0.5;
           fx += (dx / dist) * attractionForce;
           fy += (dy / dist) * attractionForce;
+        } else if (relation < 0.3 && dist < 200) {
+          // 低相关性排斥（让不相关的任务分散开）
+          const repulsionForce = this.repulsionBase * 0.3 * (200 - dist) / 200;
+          fx -= (dx / dist) * repulsionForce;
+          fy -= (dy / dist) * repulsionForce;
         }
       }
       
