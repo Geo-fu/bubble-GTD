@@ -307,18 +307,8 @@ class BubbleTodo {
    * 需要先在 https://ai.google.dev/ 申请 API Key
    */
   async geminiAnalyze(text) {
-    // 从 localStorage 获取 API Key，如果没有则提示用户
-    let API_KEY = localStorage.getItem('gemini-api-key');
-    
-    if (!API_KEY) {
-      // 尝试使用默认 key（仅用于演示）
-      API_KEY = 'YOUR_GEMINI_API_KEY';
-    }
-    
-    if (API_KEY === 'YOUR_GEMINI_API_KEY') {
-      console.log('[BubbleGTD] Gemini API Key not set, using local analysis');
-      throw new Error('API Key not configured');
-    }
+    // 使用用户的 API Key
+    let API_KEY = 'AIzaSyDsIFkGLqONEXS3SCOG8rmggAMYkMPcg6c';
     
     try {
       const response = await fetch(
