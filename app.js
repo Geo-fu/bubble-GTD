@@ -153,7 +153,8 @@ class BubbleTodo {
               color: colorConfig?.bg || { r: 100, g: 100, b: 100 },
               textColor: colorConfig?.text || '#fff',
               done: false, opacity: 1, scale: 1,
-              isAnalyzing: false
+              isAnalyzing: false,
+              restTime: 0 // 静止计时器
             });
           }
         } else {
@@ -569,7 +570,8 @@ ${tasksText}
       color: colorConfig.bg,
       textColor: colorConfig.text,
       done: false, opacity: 1, scale: 1,
-      isAnalyzing: true
+      isAnalyzing: true,
+      restTime: 0
     };
 
     this.todos.push(newTodo);
@@ -792,9 +794,20 @@ ${tasksText}
         todo.vy = (todo.vy / speed) * maxSpeed;
       }
       
-      // 4. 阻尼 - 增大以更快稳定
-      todo.vx *= 0.8;
-      todo.vy *= 0.8;
+      // 4. 动态阻尼 - 速度低时阻尼随时间增大
+      const speed = Math.sqrt(todo.vx * todo.vx + todo.vy * todo.vy);
+      if (speed < 1) {
+        // 速度低时，增加静止计时
+        todo.restTime = (todo.restTime || 0) + 1;
+      } else {
+        // 速度高时，重置计时
+        todo.restTime = 0;
+      }
+      
+      // 阻尼随静止时间增大：0.8 ~ 0.95
+      const dynamicFriction = Math.min(0.8 + todo.restTime * 0.005, 0.95);
+      todo.vx *= dynamicFriction;
+      todo.vy *= dynamicFriction;
       
       // 5. 速度很小时归零（静止阈值）
       if (speed < 0.1) {
