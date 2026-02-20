@@ -967,7 +967,6 @@ ${tasksText}
         this.ctx.font = `${reasonFontSize}px sans-serif`;
         this.ctx.fillText(todo.reason, todo.x, startY + lines.length * lineHeight + 8);
       }
-    }
   }
 
   animate() {
