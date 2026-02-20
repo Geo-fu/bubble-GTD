@@ -788,14 +788,14 @@ ${tasksText}
       
       // 3. 速度限制
       const maxSpeed = 8;
-      const speed = Math.sqrt(todo.vx * todo.vx + todo.vy * todo.vy);
+      let speed = Math.sqrt(todo.vx * todo.vx + todo.vy * todo.vy);
       if (speed > maxSpeed) {
         todo.vx = (todo.vx / speed) * maxSpeed;
         todo.vy = (todo.vy / speed) * maxSpeed;
+        speed = maxSpeed; // 更新 speed 为限制后的值
       }
       
       // 4. 动态阻尼 - 速度低时阻尼随时间增大
-      const speed = Math.sqrt(todo.vx * todo.vx + todo.vy * todo.vy);
       if (speed < 1) {
         // 速度低时，增加静止计时
         todo.restTime = (todo.restTime || 0) + 1;
