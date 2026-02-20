@@ -729,6 +729,14 @@ ${tasksText}
       todo.vy += fy;
       todo.vx *= this.friction;
       todo.vy *= this.friction;
+      
+      // 速度很小时直接归零，防止简谐振动
+      const speed = Math.sqrt(todo.vx * todo.vx + todo.vy * todo.vy);
+      if (speed < 0.5) {
+        todo.vx = 0;
+        todo.vy = 0;
+      }
+      
       todo.x += todo.vx;
       todo.y += todo.vy;
       
