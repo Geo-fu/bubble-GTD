@@ -969,7 +969,7 @@ ${tasksText}
       }
     }
   }
-  
+
   animate() {
     this.updatePhysics();
     this.render();
