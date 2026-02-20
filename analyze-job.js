@@ -4,7 +4,7 @@
  * 每 8 小时执行一次，分析所有需要 AI 评估的任务
  */
 
-const { initializeApp } = require('firebase-admin/app');
+const { initializeApp, cert } = require('firebase-admin/app');
 const { getFirestore } = require('firebase-admin/firestore');
 
 // Firebase Admin SDK 初始化（需要服务账号）
