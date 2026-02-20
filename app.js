@@ -29,8 +29,8 @@ class BubbleTodo {
     this.localIds = new Set(); // 跟踪本地添加的 ID，避免重复
     
     // 物理参数
-    this.repulsionBase = 300;
-    this.attractionBase = 0.0008;
+    this.repulsionBase = 400;  // 增加排斥力，让气泡距离更远
+    this.attractionBase = 0.0005;  // 稍微减小吸引力
     
     this.init();
   }
@@ -564,7 +564,7 @@ class BubbleTodo {
         const dist = Math.sqrt(dx * dx + dy * dy);
         if (dist === 0) continue;
         
-        const minDist = todo.radius + other.radius + 15;
+        const minDist = todo.radius + other.radius + 25;  // 增加最小间距（从15到25）
         if (dist < minDist) {
           const repulsionForce = this.repulsionBase / (dist * dist + 1);
           fx -= (dx / dist) * repulsionForce;
@@ -572,8 +572,8 @@ class BubbleTodo {
         }
         
         const importanceDiff = Math.abs(todo.importance - other.importance);
-        if (importanceDiff < 0.2 && dist > 80) {
-          const attractionForce = this.attractionBase * (1 - importanceDiff) * (dist - 80);
+        if (importanceDiff < 0.2 && dist > 100) {  // 增加吸引力触发距离（从80到100）
+          const attractionForce = this.attractionBase * (1 - importanceDiff) * (dist - 100);
           fx += (dx / dist) * attractionForce;
           fy += (dy / dist) * attractionForce;
         }
