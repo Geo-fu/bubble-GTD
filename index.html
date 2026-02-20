@@ -15,15 +15,10 @@
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
       background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
-      /* 使用 100dvh 适配 iOS Safari 动态视口 */
-      min-height: 100dvh;
+      min-height: 100vh;
       min-height: -webkit-fill-available;
       overflow: hidden;
       touch-action: none;
-      /* 防止 iOS 键盘弹出时页面上移 */
-      position: fixed;
-      width: 100%;
-      height: 100%;
     }
     
     #canvas {
@@ -40,15 +35,6 @@
       width: 90%;
       max-width: 400px;
       z-index: 100;
-      /* iOS 键盘适配 */
-      transition: bottom 0.3s ease;
-    }
-    
-    /* iOS 键盘弹出时输入框上移 */
-    @supports (-webkit-touch-callout: none) {
-      .input-container.keyboard-open {
-        bottom: 300px;
-      }
     }
     
     .input-wrapper {
@@ -110,30 +96,6 @@
   </div>
   
   <script src="app.js" type="module"></script>
-  <script>
-    // iOS 键盘适配
-    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-    const inputContainer = document.querySelector('.input-container');
-    const todoInput = document.getElementById('todoInput');
-    
-    if (isIOS) {
-      // 输入框聚焦时上移
-      todoInput.addEventListener('focus', () => {
-        inputContainer.classList.add('keyboard-open');
-      });
-      
-      // 输入框失焦时恢复
-      todoInput.addEventListener('blur', () => {
-        inputContainer.classList.remove('keyboard-open');
-      });
-      
-      // 防止页面滚动
-      document.addEventListener('touchmove', (e) => {
-        if (e.target !== todoInput) {
-          e.preventDefault();
-        }
-      }, { passive: false });
-    }
-  </script>
+</body>
 </body>
 </html>
