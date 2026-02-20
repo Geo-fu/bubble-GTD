@@ -747,16 +747,16 @@ ${tasksText}
       
       let fx = 0, fy = 0;
       
-      // 1. 所有气泡都向中心靠拢 - 有动态感但不过强
-      const dx = this.centerX - todo.x;
-      const dy = this.centerY - todo.y;
-      const distToCenter = Math.sqrt(dx * dx + dy * dy);
-      
-      // 中心引力：始终作用，随距离增加，5秒内能稳定
-      if (distToCenter > 50) {
-        const attraction = Math.min(distToCenter * 0.003, 4);
-        fx += (dx / distToCenter) * attraction;
-        fy += (dy / distToCenter) * attraction;
+      // 1. 只有最大气泡受中心引力
+      if (todo === maxTodo) {
+        const dx = this.centerX - todo.x;
+        const dy = this.centerY - todo.y;
+        const distToCenter = Math.sqrt(dx * dx + dy * dy);
+        if (distToCenter > 0) {
+          const attraction = Math.min(distToCenter * 0.005, 5);
+          fx += (dx / distToCenter) * attraction;
+          fy += (dy / distToCenter) * attraction;
+        }
       }
       
       // 2. 气泡之间排斥（防止重叠）
