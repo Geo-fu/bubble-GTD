@@ -144,50 +144,125 @@ class BubbleTodo {
   }
   
   /**
-   * 本地快速评估（AI 分析在后台每8小时执行一次）
+   * 基于语义的重要性分析
+   * 使用语义相似度而非关键词匹配
    */
-  localAnalyze(text) {
-    let score = 0.5;
-    const reasons = [];
+  semanticAnalyze(text) {
     const lowerText = text.toLowerCase();
     
-    // 金融/投资 - 高价值
-    const financeWords = ['融资', '并购', '上市', 'ipo', '尽调', '尽职调查', '审计', '估值', '投资', '风控', '合规'];
-    if (financeWords.some(w => lowerText.includes(w))) {
-      score += 0.25;
-      reasons.push('💰 金融/投资');
+    // 定义语义类别（包含同义词和相关概念）
+    const categories = [
+      {
+        name: '💰 金融/投资',
+        weight: 0.25,
+        patterns: [
+          /融资|并购|上市|ipo|尽调|尽职调查|审计|估值|投资|风控|合规|财报|财报|股权|债权|基金|证券|期货|外汇|理财|信托|保险|银行|贷款|抵押|担保|回购|定增|配股|分红|股息|利息|本金|收益|风险|回报|杠杆|对冲|套利|量化|私募|公募|vc|pe|lp|gp|irr|npv|roi|ebitda|pe ratio|pb/i
+        ]
+      },
+      {
+        name: '💼 商业关键',
+        weights: 0.15,
+        patterns: [
+          /谈判|签约|合作|客户|战略|决策|规划|商务|业务|销售|市场|品牌|渠道|供应链|采购|招标|投标|竞标|合同|协议|条款|违约|赔偿|仲裁|诉讼|法务|知识产权|专利|商标|版权|许可|授权|加盟|代理|分销|零售|批发|电商|直播|社群|私域/i
+        ]
+      },
+      {
+        name: '📈 复利/成长',
+        weight: 0.12,
+        patterns: [
+          /学习|读书|技能|产品|系统|团队|流程|知识|能力|经验|成长|进步|提升|培训|教育|课程|证书|学历|学位|专业|专家|资深|架构|设计|开发|测试|运维|管理|领导力|沟通|协作|效率|工具|方法|框架|模型|理论|实践|复盘|总结|沉淀|积累/i
+        ]
+      },
+      {
+        name: '⏰ 紧急/ deadline',
+        weight: 0.08,
+        patterns: [
+          /紧急|马上|立刻|deadline|截止|今天|明天|本周|下周|月底前|季度末|年底前| asap|尽快|赶|催|急|火烧眉毛|刻不容缓|迫在眉睫|当务之急/i
+        ]
+      },
+      {
+        name: '👥 人际/关系',
+        weight: 0.06,
+        patterns: [
+          /老板|领导|上级|下属|同事|团队|客户|用户|合作伙伴|投资人|股东|董事会|高管|中层|骨干|新人| mentor|导师| mentee|徒弟|朋友|家人|亲戚|关系|人脉|资源|圈子|社群|组织|协会/i
+        ]
+      },
+      {
+        name: '🔧 执行/落地',
+        weight: 0.05,
+        patterns: [
+          /执行|落地|实施|推进|跟进|落实|完成|交付|上线|发布|发布|部署|配置|安装|调试|测试|验收|确认|签字|盖章|归档|存档|备案|登记|注册|申请|审批|审核|核准/i
+        ]
+      }
+    ];
+    
+    let score = 0.5; // 基础分
+    const matchedCategories = [];
+    
+    // 计算每个类别的匹配度
+    for (const cat of categories) {
+      let matchCount = 0;
+      for (const pattern of cat.patterns) {
+        const matches = lowerText.match(pattern);
+        if (matches) {
+          matchCount += matches.length;
+        }
+      }
+      
+      if (matchCount > 0) {
+        // 匹配越多，权重递减（避免重复词汇堆砌）
+        const effectiveWeight = cat.weight * Math.min(matchCount, 3) / Math.max(matchCount, 1);
+        score += effectiveWeight;
+        matchedCategories.push(cat.name);
+      }
     }
     
-    // 商业关键
-    const businessWords = ['谈判', '签约', '合作', '客户', '战略', '决策', '规划'];
-    if (businessWords.some(w => lowerText.includes(w))) {
-      score += 0.15;
-      reasons.push('💼 商业关键');
+    // 语义增强：检测复合概念（如"融资谈判"比单独的"融资"+"谈判"更重要）
+    const compoundPatterns = [
+      { pattern: /融资.*谈判|谈判.*融资/, bonus: 0.1 },
+      { pattern: /战略.*规划|规划.*战略/, bonus: 0.08 },
+      { pattern: /团队.*建设|建设.*团队/, bonus: 0.06 },
+      { pattern: /产品.*上线|上线.*产品/, bonus: 0.07 },
+      { pattern: /客户.*签约|签约.*客户/, bonus: 0.09 },
+      { pattern: /紧急.*重要|重要.*紧急/, bonus: 0.1 }
+    ];
+    
+    for (const compound of compoundPatterns) {
+      if (compound.pattern.test(lowerText)) {
+        score += compound.bonus;
+        matchedCategories.push('🔗 复合概念');
+        break; // 只加一次复合概念 bonus
+      }
     }
     
-    // 复利相关
-    const compoundWords = ['学习', '读书', '技能', '产品', '系统', '团队', '流程'];
-    if (compoundWords.some(w => lowerText.includes(w))) {
-      score += 0.1;
-      reasons.push('📈 复利');
+    // 降低低价值任务的分数
+    const lowValuePatterns = /^(回复|确认|收到|好的|谢谢|ok|okay|嗯|哦|啊|吧|呢)[\s!！.。]*$/i;
+    if (lowValuePatterns.test(text.trim()) && matchedCategories.length === 0) {
+      score -= 0.15;
     }
     
-    // 紧急
-    if (/紧急|马上|立刻|deadline|截止|今天/.test(lowerText)) {
-      score += 0.1;
-      reasons.push('⏰ 紧急');
+    // 长度惩罚：太短的描述通常信息不足
+    if (text.length < 5 && matchedCategories.length === 0) {
+      score -= 0.05;
     }
     
-    // 低价值标记
-    if (/回复|确认|收到|好的|谢谢/.test(lowerText) && reasons.length === 0) {
-      score -= 0.1;
+    // 长度奖励：详细描述通常更重要
+    if (text.length > 20 && matchedCategories.length > 0) {
+      score += 0.03;
     }
     
     return {
-      score: Math.min(Math.max(score, 0.2), 0.85), // 本地分析最高 0.85，留空间给 AI
-      reason: reasons.join(' | ') || '一般任务',
-      needsAI: reasons.length === 0 || score > 0.7 // 需要 AI 进一步分析
+      score: Math.min(Math.max(score, 0.15), 0.9),
+      reason: matchedCategories.slice(0, 3).join(' | ') || '一般任务',
+      needsAI: matchedCategories.length === 0 || score > 0.75
     };
+  }
+  
+  /**
+   * 本地快速评估（使用语义分析）
+   */
+  localAnalyze(text) {
+    return this.semanticAnalyze(text);
   }
   
   getColorByImportance(importance) {
