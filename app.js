@@ -720,9 +720,7 @@ ${tasksText}
           }
         }
         
-        // 相关性引力/斥力
-        const relation = this.getTaskRelation(todo, other);
-        
+        // 相关性引力/斥力（使用已计算的 relation）
         if (relation > 0.5) {
           // 同类别强吸引，距离很近时仍保持吸引
           if (dist > todo.radius * 0.5 && dist < 300) {
