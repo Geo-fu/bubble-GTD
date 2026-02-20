@@ -17,5 +17,7 @@
     "url": "https://github.com/Geo-fu/bubble-GTD/issues"
   },
   "homepage": "https://github.com/Geo-fu/bubble-GTD#readme",
-  "dependencies": {}
+  "dependencies": {
+    "playwright": "^1.58.2"
+  }
 }

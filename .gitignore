@@ -1,0 +1,24 @@
+# Dependencies
+node_modules/
+package-lock.json
+
+# Service account key (sensitive)
+serviceAccountKey.json
+
+# Environment variables
+.env
+
+# Test outputs
+test-result.png
+test-after-reload.png
+test-error.png
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
