@@ -714,7 +714,13 @@ ${tasksText}
   }
   
   updatePhysics() {
-    this.todos.forEach(todo => { if (!todo.done) this.updateTodoSize(todo); });
+    this.todos.forEach(todo => { 
+      if (!todo.done) {
+        this.updateTodoSize(todo);
+        // 初始化能量系数（用于能量衰减）
+        if (typeof todo.energy !== 'number') todo.energy = 1.0;
+      }
+    });
     
     // 找到最大气泡（重要性最高）作为锚点
     let maxTodo = null;
@@ -726,42 +732,25 @@ ${tasksText}
       }
     }
     
-    // 计算所有气泡的平均位置（质心）
-    let avgX = 0, avgY = 0, count = 0;
-    for (const todo of this.todos) {
-      if (!todo.done) {
-        avgX += todo.x;
-        avgY += todo.y;
-        count++;
-      }
-    }
-    if (count > 0) {
-      avgX /= count;
-      avgY /= count;
-    } else {
-      avgX = this.centerX;
-      avgY = this.centerY;
-    }
-    
     for (let i = 0; i < this.todos.length; i++) {
       const todo = this.todos[i];
       if (todo.done) continue;
       
       let fx = 0, fy = 0;
       
-      // 1. 所有气泡都向中心 gentle 靠拢
+      // 1. 所有气泡都向中心 gentle 靠拢（能量衰减后力度减小）
       const dx = this.centerX - todo.x;
       const dy = this.centerY - todo.y;
       const distToCenter = Math.sqrt(dx * dx + dy * dy);
       if (distToCenter > 0) {
-        // 最大气泡引力稍强，其他气泡 gentle 靠拢
         const strength = (todo === maxTodo) ? 0.005 : 0.002;
-        const attraction = Math.min(distToCenter * strength, 3);
+        // 能量越低，引力越小（模拟能量衰减）
+        const attraction = Math.min(distToCenter * strength * todo.energy, 3);
         fx += (dx / distToCenter) * attraction;
         fy += (dy / distToCenter) * attraction;
       }
       
-      // 2. 温和排斥 - 防止过度重叠，允许轻微重叠
+      // 2. 温和排斥 - 碰撞时损失能量
       for (let j = 0; j < this.todos.length; j++) {
         if (i === j) continue;
         const other = this.todos[j];
@@ -779,6 +768,10 @@ ${tasksText}
           const repulsion = overlap * 0.4; // 温和排斥
           fx -= (odx / dist) * repulsion;
           fy -= (ody / dist) * repulsion;
+          
+          // 碰撞时损失能量
+          todo.energy = Math.max(0.3, todo.energy - 0.02);
+          other.energy = Math.max(0.3, other.energy - 0.02);
         }
       }
       
