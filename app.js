@@ -704,7 +704,6 @@ ${tasksText}
         const minDist = todo.radius + other.radius;
         if (dist < minDist) {
           // 同类别时允许轻微重叠，不同类别时强排斥
-          const relation = this.getTaskRelation(todo, other);
           if (relation > 0.5) {
             // 同类别：温和排斥，允许轻微重叠
             const overlap = minDist - dist;
@@ -782,6 +781,12 @@ ${tasksText}
     for (const todo of this.todos) {
       if (todo.done && todo.opacity <= 0) continue;
       const r = todo.radius * todo.scale;
+      
+      // 检查无效值
+      if (!isFinite(todo.x) || !isFinite(todo.y) || !isFinite(r) || r <= 0) {
+        console.warn('[BubbleGTD] Invalid render values:', todo.x, todo.y, r);
+        continue;
+      }
       
       const bg = todo.color;
       
