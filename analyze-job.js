@@ -88,40 +88,33 @@ async function main() {
   console.log('Starting AI analysis job...', new Date().toISOString());
   
   try {
-    // 获取所有用户的任务
-    const usersSnapshot = await db.collection('users').get();
+    // 获取所有需要 AI 分析的任务（新的数据结构）
+    const todosQuery = await db.collection('todos')
+      .where('needsAI', '==', true)
+      .where('aiAnalyzed', '==', false)
+      .get();
     
-    for (const userDoc of usersSnapshot.docs) {
-      const userId = userDoc.id;
+    console.log(`${todosQuery.docs.length} tasks need analysis`);
+    
+    for (const todoDoc of todosQuery.docs) {
+      const todo = todoDoc.data();
       
-      // 获取该用户需要 AI 分析的任务
-      const todosQuery = await db.collection('users', userId, 'todos')
-        .where('needsAI', '==', true)
-        .where('aiAnalyzed', '==', false)
-        .get();
+      // 调用 AI 分析
+      const analysis = await analyzeWithAI(todo.text);
       
-      console.log(`User ${userId}: ${todosQuery.docs.length} tasks need analysis`);
-      
-      for (const todoDoc of todosQuery.docs) {
-        const todo = todoDoc.data();
+      if (analysis) {
+        // 更新任务
+        await todoDoc.ref.update({
+          importance: analysis.score,
+          reason: analysis.reason,
+          aiAnalyzed: true,
+          aiAnalyzedAt: new Date()
+        });
         
-        // 调用 AI 分析
-        const analysis = await analyzeWithAI(todo.text);
+        console.log(`  Analyzed: "${todo.text.substring(0, 30)}..." -> ${analysis.score}`);
         
-        if (analysis) {
-          // 更新任务
-          await todoDoc.ref.update({
-            importance: analysis.score,
-            reason: analysis.reason,
-            aiAnalyzed: true,
-            aiAnalyzedAt: new Date()
-          });
-          
-          console.log(`  Analyzed: "${todo.text.substring(0, 30)}..." -> ${analysis.score}`);
-          
-          // 限流：每 2 秒分析一个任务
-          await new Promise(resolve => setTimeout(resolve, 2000));
-        }
+        // 限流：每 2 秒分析一个任务
+        await new Promise(resolve => setTimeout(resolve, 2000));
       }
     }
     

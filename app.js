@@ -54,21 +54,24 @@ class BubbleTodo {
   }
   
   async initAuth() {
-    onAuthStateChanged(auth, (user) => {
-      if (user) {
-        this.userId = user.uid;
-        console.log('Logged in:', user.uid);
-        this.loadTodosFromFirebase();
-      } else {
-        signInAnonymously(auth).catch(console.error);
-      }
-    });
+    // 使用固定的用户 ID 实现跨设备同步
+    // 从 localStorage 获取或生成固定 ID
+    let fixedUserId = localStorage.getItem('bubble-gtd-userid');
+    if (!fixedUserId) {
+      // 生成一个随机的固定 ID
+      fixedUserId = 'user_' + Math.random().toString(36).substring(2, 15);
+      localStorage.setItem('bubble-gtd-userid', fixedUserId);
+    }
+    this.userId = fixedUserId;
+    console.log('User ID:', this.userId);
+    this.loadTodosFromFirebase();
   }
   
   async loadTodosFromFirebase() {
     if (!this.userId) return;
     
-    const q = query(collection(db, 'users', this.userId, 'todos'), orderBy('createdAt', 'desc'));
+    // 使用简单的集合结构，每个文档包含 userId 字段
+    const q = query(collection(db, 'todos'), orderBy('createdAt', 'desc'));
     
     // 先获取现有数据
     try {
@@ -77,6 +80,9 @@ class BubbleTodo {
       
       snapshot.forEach((doc) => {
         const data = doc.data();
+        // 只加载当前用户的数据
+        if (data.userId !== this.userId) return;
+        
         const colorConfig = this.getColorByImportance(data.importance);
         const radius = 20 + Math.pow(data.importance, 2) * 100;
         
@@ -108,6 +114,9 @@ class BubbleTodo {
       snapshot.docChanges().forEach((change) => {
         const data = change.doc.data();
         const id = change.doc.id;
+        
+        // 只处理当前用户的数据
+        if (data.userId !== this.userId) return;
         
         if (change.type === 'added') {
           if (!this.todos.find(t => t.id === id)) {
@@ -232,17 +241,39 @@ class BubbleTodo {
     btn.textContent = '...';
     btn.disabled = true;
     
-    // 只使用本地分析，AI 分析在后台每8小时执行
+    // 本地分析
     const analysis = this.localAnalyze(text);
+    const id = Date.now().toString();
     
-    // 保存到 Firebase
+    // 立即本地显示（0.1秒内）
+    const colorConfig = this.getColorByImportance(analysis.score);
+    const radius = 20 + Math.pow(analysis.score, 2) * 100;
+    this.todos.push({
+      id: id,
+      text: text,
+      importance: analysis.score,
+      targetImportance: analysis.score,
+      reason: analysis.reason,
+      radius: radius,
+      targetRadius: radius,
+      x: this.centerX + (Math.random() - 0.5) * 200,
+      y: this.centerY + (Math.random() - 0.5) * 200,
+      vx: 0, vy: 0,
+      color: colorConfig.bg,
+      textColor: colorConfig.text,
+      done: false, opacity: 1, scale: 1,
+      isAnalyzing: false
+    });
+    
+    // 后台同步到 Firebase
     try {
-      await setDoc(doc(db, 'users', this.userId, 'todos', Date.now().toString()), {
+      await setDoc(doc(db, 'todos', id), {
+        userId: this.userId,  // 添加 userId 字段用于过滤
         text: text,
         importance: analysis.score,
         reason: analysis.reason,
-        needsAI: analysis.needsAI, // 标记需要 AI 分析
-        aiAnalyzed: false, // AI 尚未分析
+        needsAI: analysis.needsAI,
+        aiAnalyzed: false,
         createdAt: serverTimestamp()
       });
     } catch (e) {
@@ -311,7 +342,7 @@ class BubbleTodo {
     
     if (this.userId) {
       try {
-        await deleteDoc(doc(db, 'users', this.userId, 'todos', todo.id));
+        await deleteDoc(doc(db, 'todos', todo.id));
       } catch (e) {
         console.error('Delete failed:', e);
       }
