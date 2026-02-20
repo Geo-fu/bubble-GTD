@@ -119,7 +119,7 @@ class BubbleTodo {
     const networkEffectKeywords = [
       '团队', '合作', '协作', '分享', '交流', '会议', '沟通',
       '招聘', '培训', '传承', '文档', '知识库', '方法论'
-    ]);
+    ];
     networkEffectKeywords.forEach(word => {
       if (lowerText.includes(word)) score += 0.1;
     });
