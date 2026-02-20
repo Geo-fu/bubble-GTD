@@ -82,6 +82,18 @@ class BubbleTodo {
     const hasPeople2 = peopleWords.some(w => text2.includes(w));
     if (hasPeople1 && hasPeople2) relevance += 0.15;
     
+    // 6. 金融/投资相关性 - 新增
+    const financeWords = ['融资', '并购', '上市', 'ipo', '尽调', '尽职调查', '审计', '估值', '投资'];
+    const hasFinance1 = financeWords.some(w => text1.includes(w));
+    const hasFinance2 = financeWords.some(w => text2.includes(w));
+    if (hasFinance1 && hasFinance2) relevance += 0.3; // 金融相关事项高度相关
+    
+    // 7. 商业/法律相关性 - 新增
+    const businessWords = ['合同', '协议', '法务', '合规', '谈判', '签约'];
+    const hasBusiness1 = businessWords.some(w => text1.includes(w));
+    const hasBusiness2 = businessWords.some(w => text2.includes(w));
+    if (hasBusiness1 && hasBusiness2) relevance += 0.25;
+    
     return Math.min(relevance, 1);
   }
   
@@ -124,35 +136,65 @@ class BubbleTodo {
     const lowerText = text.toLowerCase();
     const reasons = [];
     
+    // 1. 时间复利
     const timeWords = ['学习', '读书', '技能', '提升', '成长', '习惯', '健康', '理财'];
     let timeScore = 0;
     timeWords.forEach(w => { if (lowerText.includes(w)) timeScore += 0.15; });
     if (timeScore > 0) { score += Math.min(timeScore, 0.3); reasons.push('💡 时间复利'); }
     
+    // 2. 边际收益
     const marginWords = ['产品', '系统', '流程', '自动化', '品牌', '平台'];
     let marginScore = 0;
     marginWords.forEach(w => { if (lowerText.includes(w)) marginScore += 0.12; });
     if (marginScore > 0) { score += Math.min(marginScore, 0.25); reasons.push('🛠️ 边际收益'); }
     
+    // 3. 网络效应
     const networkWords = ['团队', '合作', '培训', '分享', '传承', '文档'];
     let networkScore = 0;
     networkWords.forEach(w => { if (lowerText.includes(w)) networkScore += 0.1; });
     if (networkScore > 0) { score += Math.min(networkScore, 0.2); reasons.push('👥 网络效应'); }
     
-    const leverageWords = ['战略', '决策', '规划', '融资', '并购', '上市'];
+    // 4. 杠杆效应 - 扩展更多商业术语
+    const leverageWords = ['战略', '决策', '规划', '融资', '并购', '上市', 'ipo', '扩张', '规模化'];
     let leverageScore = 0;
     leverageWords.forEach(w => { if (lowerText.includes(w)) leverageScore += 0.18; });
     if (leverageScore > 0) { score += Math.min(leverageScore, 0.35); reasons.push('🎯 杠杆效应'); }
     
-    const negativeWords = ['琐事', '重复', '机械', '无意义', '内耗', '扯皮'];
+    // 5. 投资/金融相关 - 高价值活动
+    const financeWords = ['投资', '估值', '尽调', '尽职调查', '审计', '风控', '合规', '法务', '合同', '协议'];
+    let financeScore = 0;
+    financeWords.forEach(w => { if (lowerText.includes(w)) financeScore += 0.2; });
+    if (financeScore > 0) { score += Math.min(financeScore, 0.4); reasons.push('💰 金融/投资'); }
+    
+    // 6. 商业关键活动
+    const businessWords = ['谈判', '签约', '合作', '客户', '订单', '收入', '利润', '成本', '预算'];
+    let businessScore = 0;
+    businessWords.forEach(w => { if (lowerText.includes(w)) businessScore += 0.15; });
+    if (businessScore > 0) { score += Math.min(businessScore, 0.3); reasons.push('💼 商业关键'); }
+    
+    // 7. 紧急程度
+    const urgentWords = ['紧急', '马上', '立刻', 'deadline', '截止', '今天', '明天'];
+    let urgentScore = 0;
+    urgentWords.forEach(w => { if (lowerText.includes(w)) urgentScore += 0.12; });
+    if (urgentScore > 0) { score += Math.min(urgentScore, 0.25); reasons.push('⏰ 紧急'); }
+    
+    // 8. 负面复利（减分）
+    const negativeWords = ['琐事', '重复', '机械', '无意义', '内耗', '扯皮', '推诿'];
     negativeWords.forEach(w => { if (lowerText.includes(w)) score -= 0.2; });
     
-    if (/会议|开会|讨论/.test(text) && !/决策|确定/.test(text)) {
-      score -= 0.1; reasons.push('⚠️ 低产出会议');
+    // 9. 任务类型判断
+    if (/会议|开会|讨论/.test(text) && !/决策|确定|融资|并购|战略/.test(text)) {
+      score -= 0.1;
+      if (reasons.length === 0) reasons.push('⚠️ 低产出会议');
     }
     
-    if (/回复|确认|知悉/.test(text)) score -= 0.1;
-    if (/思考|规划|设计|架构/.test(text)) score += 0.1;
+    if (/回复|确认|知悉/.test(text) && !/融资|并购|合同|协议/.test(text)) {
+      score -= 0.1;
+    }
+    
+    if (/思考|规划|设计|架构|尽调|审计/.test(text)) {
+      score += 0.1;
+    }
     
     return { score: Math.min(Math.max(score, 0.1), 1), reason: reasons.join(' | ') || '一般任务', isQuick: false };
   }
