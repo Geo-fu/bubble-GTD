@@ -804,8 +804,8 @@ ${tasksText}
         todo.restTime = 0;
       }
       
-      // 阻尼随静止时间增大：0.8 ~ 0.95
-      const dynamicFriction = Math.min(0.8 + todo.restTime * 0.005, 0.95);
+      // 阻尼随静止时间增大：0.95 ~ 0.5（阻力越来越大）
+      const dynamicFriction = Math.max(0.95 - todo.restTime * 0.01, 0.5);
       todo.vx *= dynamicFriction;
       todo.vy *= dynamicFriction;
       
