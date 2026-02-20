@@ -709,22 +709,22 @@ ${tasksText}
       
       let fx = 0, fy = 0;
       
-      // 1. 只有最大气泡受中心引力（锚定作用）
+      // 1. 只有最大气泡受中心引力（锚定作用）- 增强力度
       if (todo === maxTodo) {
         const dx = this.centerX - todo.x;
         const dy = this.centerY - todo.y;
-        fx += dx * 0.01;
-        fy += dy * 0.01;
+        fx += dx * 0.03;
+        fy += dy * 0.03;
       }
       
-      // 2. 小气泡被最大气泡吸引（向锚点聚集）
+      // 2. 小气泡被最大气泡吸引（向锚点聚集）- 增强力度
       if (maxTodo && todo !== maxTodo) {
         const adx = maxTodo.x - todo.x;
         const ady = maxTodo.y - todo.y;
         const distToMax = Math.sqrt(adx * adx + ady * ady);
         if (distToMax > 0) {
-          // 吸引力随距离增加而增强，但远距离时减弱
-          const attraction = Math.min(distToMax * 0.005, 3);
+          // 强吸引力，确保小气泡快速向最大气泡聚集
+          const attraction = Math.min(distToMax * 0.02, 8);
           fx += (adx / distToMax) * attraction;
           fy += (ady / distToMax) * attraction;
         }
