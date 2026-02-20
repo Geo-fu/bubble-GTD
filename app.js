@@ -699,96 +699,40 @@ ${tasksText}
       
       let fx = 0, fy = 0;
       
-      // 根据任务类别施加不同的中心偏移力 - 增强聚集效果
-      const categoryOffset = this.getCategoryOffset(todo);
-      const targetX = this.centerX + categoryOffset.x;
-      const targetY = this.centerY + categoryOffset.y;
+      // 1. 向屏幕中心聚集
+      const dx = this.centerX - todo.x;
+      const dy = this.centerY - todo.y;
+      fx += dx * 0.005;
+      fy += dy * 0.005;
       
-      // 大幅增强类别中心吸引力，让同类更聚集
-      const categoryForce = 0.002 + this.centerAttraction * (0.2 + todo.importance * 0.5);
-      fx += (targetX - todo.x) * categoryForce;
-      fy += (targetY - todo.y) * categoryForce;
-      
+      // 2. 气泡之间简单排斥（防止重叠）
       for (let j = 0; j < this.todos.length; j++) {
         if (i === j) continue;
         const other = this.todos[j];
         if (other.done) continue;
         
-        const dx = other.x - todo.x;
-        const dy = other.y - todo.y;
-        const dist = Math.sqrt(dx * dx + dy * dy);
+        const odx = other.x - todo.x;
+        const ody = other.y - todo.y;
+        const dist = Math.sqrt(odx * odx + ody * ody);
         if (!isFinite(dist) || dist === 0) continue;
         
-        // 计算任务间相关性（与重要性无关）
-        const relation = this.getTaskRelation(todo, other);
-        
-        // 基础排斥力（防止重叠）
         const minDist = todo.radius + other.radius;
         if (dist < minDist) {
-          // 同类别时允许轻微重叠，不同类别时强排斥
-          if (relation > 0.5) {
-            // 同类别：温和排斥，允许轻微重叠
-            const overlap = minDist - dist;
-            const repulsionForce = overlap * 0.5; // 很温和
-            fx -= (dx / dist) * repulsionForce;
-            fy -= (dy / dist) * repulsionForce;
-          } else {
-            // 不同类别：强排斥，保持距离
-            const overlap = minDist - dist;
-            const repulsionForce = overlap * 3; // 强排斥
-            fx -= (dx / dist) * repulsionForce;
-            fy -= (dy / dist) * repulsionForce;
-          }
-        }
-        
-        // 相关性引力/斥力（使用已计算的 relation）
-        if (relation > 0.5) {
-          // 同类别强吸引，距离很近时仍保持吸引
-          if (dist > todo.radius * 0.5 && dist < 300) {
-            // 吸引力在近距离时仍然有效
-            const targetDist = todo.radius * 0.8; // 目标距离：轻微重叠
-            const distDiff = dist - targetDist;
-            const attractionForce = this.attractionBase * relation * distDiff * 5;
-            fx += (dx / dist) * attractionForce;
-            fy += (dy / dist) * attractionForce;
-          }
-        } else if (relation < 0.3 && dist < 400) {
-          // 不同类别强排斥，保持更大距离
-          const repulsionForce = this.repulsionBase * 0.8 * (400 - dist) / 400;
-          fx -= (dx / dist) * repulsionForce;
-          fy -= (dy / dist) * repulsionForce;
+          const overlap = minDist - dist;
+          fx -= (odx / dist) * overlap * 0.5;
+          fy -= (ody / dist) * overlap * 0.5;
         }
       }
       
-      // 应用力并限制最大速度，防止震荡
+      // 3. 应用力和阻尼
       todo.vx += fx;
       todo.vy += fy;
-      
-      // 速度限制 - 防止过快移动导致震荡
-      const maxSpeed = 8;
-      const speed = Math.sqrt(todo.vx * todo.vx + todo.vy * todo.vy);
-      if (speed > maxSpeed && speed > 0) {
-        todo.vx = (todo.vx / speed) * maxSpeed;
-        todo.vy = (todo.vy / speed) * maxSpeed;
-      }
-      
-      // 当速度很小时直接归零，帮助稳定
-      if (speed < 0.1) {
-        todo.vx = 0;
-        todo.vy = 0;
-      }
-      
       todo.vx *= this.friction;
       todo.vy *= this.friction;
       todo.x += todo.vx;
       todo.y += todo.vy;
       
-      // 防止 NaN 传播
-      if (!isFinite(todo.x)) todo.x = this.centerX;
-      if (!isFinite(todo.y)) todo.y = this.centerY;
-      if (!isFinite(todo.vx)) todo.vx = 0;
-      if (!isFinite(todo.vy)) todo.vy = 0;
-      
+      // 4. 边界限制
       const margin = todo.radius + 20;
       if (todo.x < margin) { todo.x = margin; todo.vx *= -0.5; }
       if (todo.x > this.canvas.width - margin) { todo.x = this.canvas.width - margin; todo.vx *= -0.5; }
@@ -796,6 +740,7 @@ ${tasksText}
       if (todo.y > this.canvas.height - margin) { todo.y = this.canvas.height - margin; todo.vy *= -0.5; }
     }
     
+    // 粒子动画
     for (let i = this.particles.length - 1; i >= 0; i--) {
       const p = this.particles[i];
       p.x += p.vx; p.y += p.vy; p.vy += 0.1; p.life -= 0.02;
