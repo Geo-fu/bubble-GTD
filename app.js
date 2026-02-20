@@ -59,9 +59,6 @@ class BubbleTodo {
       if (e.key === 'Enter') this.addTodo();
     });
     
-    // 设置按钮
-    this.initSettings();
-    
     // 直接加载数据，不需要登录
     this.loadTodosFromFirebase();
   }
