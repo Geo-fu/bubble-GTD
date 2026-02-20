@@ -1,3 +1,22 @@
+// Firebase 配置
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-app.js";
+import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-auth.js";
+import { getFirestore, collection, doc, setDoc, deleteDoc, onSnapshot, query, orderBy, serverTimestamp } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyCsdgcHag_08oDCn6pGZU9Sq4tiz762IUU",
+  authDomain: "bubble-gtd.firebaseapp.com",
+  projectId: "bubble-gtd",
+  storageBucket: "bubble-gtd.firebasestorage.app",
+  messagingSenderId: "651653716880",
+  appId: "1:651653716880:web:466a414d0fb2f5c940b115",
+  measurementId: "G-Z1B8YXZ5KM"
+};
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+
 class BubbleTodo {
   constructor() {
     this.canvas = document.getElementById('canvas');
@@ -8,18 +27,17 @@ class BubbleTodo {
     this.centerAttraction = 0.0003;
     this.touch = { x: 0, y: 0, isDown: false, target: null };
     this.longPressTimer = null;
+    this.userId = null;
+    this.unsubscribe = null;
     
     // 物理参数
     this.repulsionBase = 300;
     this.attractionBase = 0.0008;
     
-    // API 配置 - 使用你的 Key
+    // API 配置
     this.apiKey = 'sk-bykEHxDd8e40RqS1jjywffXa2FwbFpdKpDzbT7Q1WyTk4kxY';
     this.useAI = true;
-    
-    // 缓存：已分析的任务文本 -> 结果
     this.aiCache = new Map();
-    // 从 localStorage 加载缓存
     this.loadCache();
     
     this.init();
@@ -37,7 +55,67 @@ class BubbleTodo {
       if (e.key === 'Enter') this.addTodo();
     });
     
-    this.loadTodos();
+    // Firebase 匿名登录
+    this.initAuth();
+  }
+  
+  async initAuth() {
+    onAuthStateChanged(auth, (user) => {
+      if (user) {
+        this.userId = user.uid;
+        console.log('Logged in:', user.uid);
+        this.loadTodosFromFirebase();
+      } else {
+        signInAnonymously(auth).catch(console.error);
+      }
+    });
+  }
+  
+  loadTodosFromFirebase() {
+    if (!this.userId) return;
+    
+    const q = query(collection(db, 'users', this.userId, 'todos'), orderBy('createdAt', 'desc'));
+    
+    this.unsubscribe = onSnapshot(q, (snapshot) => {
+      const changes = snapshot.docChanges();
+      
+      changes.forEach((change) => {
+        const data = change.doc.data();
+        const id = change.doc.id;
+        
+        if (change.type === 'added') {
+          // 检查是否已存在
+          if (!this.todos.find(t => t.id === id)) {
+            const colorConfig = this.getColorByImportance(data.importance);
+            const radius = 20 + Math.pow(data.importance, 2) * 100;
+            
+            this.todos.push({
+              id: id,
+              text: data.text,
+              importance: data.importance,
+              targetImportance: data.importance,
+              reason: data.reason,
+              radius: radius,
+              targetRadius: radius,
+              x: this.centerX + (Math.random() - 0.5) * 200,
+              y: this.centerY + (Math.random() - 0.5) * 200,
+              vx: 0, vy: 0,
+              color: colorConfig.bg,
+              textColor: colorConfig.text,
+              done: false, opacity: 1, scale: 1,
+              isAnalyzing: false
+            });
+          }
+        } else if (change.type === 'removed') {
+          const index = this.todos.findIndex(t => t.id === id);
+          if (index !== -1) {
+            this.todos[index].done = true;
+            this.triggerExplosion(this.todos[index]);
+          }
+        }
+      });
+    });
+    
     this.animate();
   }
   
@@ -48,15 +126,38 @@ class BubbleTodo {
     this.centerY = this.canvas.height / 2;
   }
   
+  // 缓存管理
+  loadCache() {
+    try {
+      const saved = localStorage.getItem('bubbleAICache');
+      if (saved) {
+        const data = JSON.parse(saved);
+        this.aiCache = new Map(data);
+      }
+    } catch (e) {
+      this.aiCache = new Map();
+    }
+  }
+  
+  saveCache() {
+    try {
+      const entries = Array.from(this.aiCache.entries());
+      if (entries.length > 100) {
+        entries.splice(0, entries.length - 100);
+      }
+      localStorage.setItem('bubbleAICache', JSON.stringify(entries));
+    } catch (e) {
+      console.log('Save cache failed:', e);
+    }
+  }
+  
   /**
    * 调用 Kimi API 进行智能语义分析（带缓存）
    */
   async analyzeWithAI(text) {
     const cacheKey = text.trim().toLowerCase();
     
-    // 1. 检查缓存
     if (this.aiCache.has(cacheKey)) {
-      console.log('Cache hit:', text);
       return this.aiCache.get(cacheKey);
     }
     
@@ -94,7 +195,6 @@ class BubbleTodo {
           reason: result.reason || 'AI评估'
         };
         
-        // 2. 存入缓存
         this.aiCache.set(cacheKey, analysis);
         this.saveCache();
         
@@ -106,33 +206,6 @@ class BubbleTodo {
     return null;
   }
   
-  // 缓存管理
-  loadCache() {
-    try {
-      const saved = localStorage.getItem('bubbleAICache');
-      if (saved) {
-        const data = JSON.parse(saved);
-        this.aiCache = new Map(data);
-        console.log('Loaded cache:', this.aiCache.size, 'items');
-      }
-    } catch (e) {
-      this.aiCache = new Map();
-    }
-  }
-  
-  saveCache() {
-    try {
-      // 只保留最近 100 条缓存
-      const entries = Array.from(this.aiCache.entries());
-      if (entries.length > 100) {
-        entries.splice(0, entries.length - 100);
-      }
-      localStorage.setItem('bubbleAICache', JSON.stringify(entries));
-    } catch (e) {
-      console.log('Save cache failed:', e);
-    }
-  }
-  
   /**
    * 本地快速评估（备用）
    */
@@ -141,21 +214,18 @@ class BubbleTodo {
     const reasons = [];
     const lowerText = text.toLowerCase();
     
-    // 金融/投资
     const financeWords = ['融资', '并购', '上市', 'ipo', '尽调', '尽职调查', '审计', '估值', '投资', '风控'];
     if (financeWords.some(w => lowerText.includes(w))) {
       score += 0.25;
       reasons.push('💰 金融/投资');
     }
     
-    // 商业关键
     const businessWords = ['谈判', '签约', '合作', '客户', '战略', '决策'];
     if (businessWords.some(w => lowerText.includes(w))) {
       score += 0.15;
       reasons.push('💼 商业关键');
     }
     
-    // 紧急
     if (/紧急|马上|立刻|deadline|截止/.test(lowerText)) {
       score += 0.1;
       reasons.push('⏰ 紧急');
@@ -168,103 +238,65 @@ class BubbleTodo {
   }
   
   getColorByImportance(importance) {
-    // 返回背景色和文字色
-    if (importance > 0.9) return { bg: { r: 220, g: 53, b: 69 }, text: '#fff' };    // 深红
-    if (importance > 0.8) return { bg: { r: 253, g: 126, b: 20 }, text: '#fff' };   // 橙色
-    if (importance > 0.7) return { bg: { r: 255, g: 193, b: 7 }, text: '#212529' }; // 黄色
-    if (importance > 0.6) return { bg: { r: 40, g: 167, b: 69 }, text: '#fff' };    // 绿色
-    if (importance > 0.5) return { bg: { r: 23, g: 162, b: 184 }, text: '#fff' };   // 青色
-    if (importance > 0.4) return { bg: { r: 0, g: 123, b: 255 }, text: '#fff' };    // 蓝色
-    if (importance > 0.3) return { bg: { r: 111, g: 66, b: 193 }, text: '#fff' };   // 紫色
-    if (importance > 0.2) return { bg: { r: 108, g: 117, b: 125 }, text: '#fff' };  // 灰色
-    return { bg: { r: 73, g: 80, b: 87 }, text: '#fff' };                            // 深灰
+    if (importance > 0.9) return { bg: { r: 220, g: 53, b: 69 }, text: '#fff' };
+    if (importance > 0.8) return { bg: { r: 253, g: 126, b: 20 }, text: '#fff' };
+    if (importance > 0.7) return { bg: { r: 255, g: 193, b: 7 }, text: '#212529' };
+    if (importance > 0.6) return { bg: { r: 40, g: 167, b: 69 }, text: '#fff' };
+    if (importance > 0.5) return { bg: { r: 23, g: 162, b: 184 }, text: '#fff' };
+    if (importance > 0.4) return { bg: { r: 0, g: 123, b: 255 }, text: '#fff' };
+    if (importance > 0.3) return { bg: { r: 111, g: 66, b: 193 }, text: '#fff' };
+    if (importance > 0.2) return { bg: { r: 108, g: 117, b: 125 }, text: '#fff' };
+    return { bg: { r: 73, g: 80, b: 87 }, text: '#fff' };
   }
   
   async addTodo() {
     const input = document.getElementById('todoInput');
     const text = input.value.trim();
-    if (!text) return;
+    if (!text || !this.userId) return;
     
     const btn = document.getElementById('addBtn');
     btn.textContent = '...';
     btn.disabled = true;
     
-    // 优先使用 AI 分析
     let analysis = await this.analyzeWithAI(text);
+    if (!analysis) analysis = this.localAnalyze(text);
     
-    // AI 失败则使用本地分析
-    if (!analysis) {
-      analysis = this.localAnalyze(text);
+    // 保存到 Firebase
+    try {
+      await setDoc(doc(db, 'users', this.userId, 'todos', Date.now().toString()), {
+        text: text,
+        importance: analysis.score,
+        reason: analysis.reason,
+        createdAt: serverTimestamp()
+      });
+    } catch (e) {
+      console.error('Save failed:', e);
     }
     
-    const radius = 20 + Math.pow(analysis.score, 2) * 100;
-    
-    const todo = {
-      id: Date.now(),
-      text: text,
-      importance: analysis.score,
-      targetImportance: analysis.score,
-      reason: analysis.reason,
-      radius: radius,
-      targetRadius: radius,
-      x: this.centerX + (Math.random() - 0.5) * 200,
-      y: this.centerY + (Math.random() - 0.5) * 200,
-      vx: 0, vy: 0,
-      color: this.getColorByImportance(analysis.score).bg,
-      textColor: this.getColorByImportance(analysis.score).text,
-      done: false, opacity: 1, scale: 1,
-      isAnalyzing: false
-    };
-    
-    this.todos.push(todo);
-    this.saveTodos();
     input.value = '';
     btn.textContent = '+';
     btn.disabled = false;
   }
   
-  saveTodos() {
-    localStorage.setItem('bubbleTodos', JSON.stringify(this.todos.filter(t => !t.done).map(t => t.text)));
-  }
-  
-  async loadTodos() {
-    const saved = localStorage.getItem('bubbleTodos');
-    if (saved) {
-      const texts = JSON.parse(saved);
-      for (const text of texts) {
-        if (typeof text === 'string') {
-          const cacheKey = text.trim().toLowerCase();
-          let analysis;
-          
-          // 优先使用缓存，没有则本地分析
-          if (this.aiCache.has(cacheKey)) {
-            analysis = this.aiCache.get(cacheKey);
-          } else {
-            analysis = this.localAnalyze(text);
-          }
-          
-          const radius = 20 + Math.pow(analysis.score, 2) * 100;
-          const colorConfig = this.getColorByImportance(analysis.score);
-          
-          this.todos.push({
-            id: Date.now() + Math.random(),
-            text: text,
-            importance: analysis.score,
-            targetImportance: analysis.score,
-            reason: analysis.reason,
-            radius: radius,
-            targetRadius: radius,
-            x: this.centerX + (Math.random() - 0.5) * 200,
-            y: this.centerY + (Math.random() - 0.5) * 200,
-            vx: 0, vy: 0,
-            color: colorConfig.bg,
-            textColor: colorConfig.text,
-            done: false, opacity: 1, scale: 1,
-            isAnalyzing: false
-          });
-        }
-      }
+  triggerExplosion(todo) {
+    for (let i = 0; i < 30; i++) {
+      const angle = (Math.PI * 2 * i) / 30;
+      const speed = 2 + Math.random() * 4;
+      this.particles.push({
+        x: todo.x, y: todo.y,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed,
+        life: 1,
+        color: todo.color,
+        size: 3 + Math.random() * 5
+      });
     }
+    const fadeOut = () => {
+      todo.opacity -= 0.05;
+      todo.scale += 0.1;
+      if (todo.opacity > 0) requestAnimationFrame(fadeOut);
+    };
+    fadeOut();
   }
   
   updateTodoSize(todo) {
@@ -298,17 +330,17 @@ class BubbleTodo {
   
   handleEnd() { clearTimeout(this.longPressTimer); this.touch.isDown = false; this.touch.target = null; }
   
-  completeTodo(todo) {
+  async completeTodo(todo) {
     if (todo.done) return;
-    todo.done = true;
-    for (let i = 0; i < 30; i++) {
-      const angle = (Math.PI * 2 * i) / 30;
-      const speed = 2 + Math.random() * 4;
-      this.particles.push({ x: todo.x, y: todo.y, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed, life: 1, color: todo.color, size: 3 + Math.random() * 5 });
+    
+    // 从 Firebase 删除
+    if (this.userId) {
+      try {
+        await deleteDoc(doc(db, 'users', this.userId, 'todos', todo.id));
+      } catch (e) {
+        console.error('Delete failed:', e);
+      }
     }
-    const fadeOut = () => { todo.opacity -= 0.05; todo.scale += 0.1; if (todo.opacity > 0) requestAnimationFrame(fadeOut); };
-    fadeOut();
-    this.saveTodos();
   }
   
   updatePhysics() {
@@ -320,12 +352,10 @@ class BubbleTodo {
       
       let fx = 0, fy = 0;
       
-      // 重要性越高中引力越强
       const centerForce = this.centerAttraction * (0.5 + todo.importance * 1.5);
       fx += (this.centerX - todo.x) * centerForce;
       fy += (this.centerY - todo.y) * centerForce;
       
-      // 与其他事项的相互作用
       for (let j = 0; j < this.todos.length; j++) {
         if (i === j) continue;
         const other = this.todos[j];
@@ -336,7 +366,6 @@ class BubbleTodo {
         const dist = Math.sqrt(dx * dx + dy * dy);
         if (dist === 0) continue;
         
-        // 防止重叠
         const minDist = todo.radius + other.radius + 15;
         if (dist < minDist) {
           const repulsionForce = this.repulsionBase / (dist * dist + 1);
@@ -344,7 +373,6 @@ class BubbleTodo {
           fy -= (dy / dist) * repulsionForce;
         }
         
-        // 重要性相近的事项相互吸引（聚类）
         const importanceDiff = Math.abs(todo.importance - other.importance);
         if (importanceDiff < 0.2 && dist > 80) {
           const attractionForce = this.attractionBase * (1 - importanceDiff) * (dist - 80);
@@ -381,9 +409,7 @@ class BubbleTodo {
       if (todo.done && todo.opacity <= 0) continue;
       const r = todo.radius * todo.scale;
       
-      // 获取颜色配置
-      const colorConfig = this.getColorByImportance(todo.importance);
-      const bg = colorConfig.bg;
+      const bg = todo.color;
       
       const gradient = this.ctx.createRadialGradient(
         todo.x - r * 0.3, todo.y - r * 0.3, 0,
@@ -397,13 +423,11 @@ class BubbleTodo {
       this.ctx.arc(todo.x, todo.y, r, 0, Math.PI * 2);
       this.ctx.fill();
       
-      // 高光
       this.ctx.fillStyle = `rgba(255, 255, 255, ${0.25 * todo.opacity})`;
       this.ctx.beginPath();
       this.ctx.arc(todo.x - r * 0.3, todo.y - r * 0.3, r * 0.2, 0, Math.PI * 2);
       this.ctx.fill();
       
-      // 文字颜色根据背景色自动选择
       const textColor = todo.textColor || '#fff';
       this.ctx.fillStyle = textColor === '#fff' 
         ? `rgba(255, 255, 255, ${todo.opacity})`
@@ -432,7 +456,6 @@ class BubbleTodo {
         this.ctx.fillText(line, todo.x, startY + index * lineHeight);
       });
       
-      // 原因文字
       if (todo.reason && r > 40) {
         this.ctx.fillStyle = textColor === '#fff'
           ? `rgba(255, 255, 255, ${0.7 * todo.opacity})`
@@ -443,9 +466,9 @@ class BubbleTodo {
       }
     }
     
-    // 粒子效果
     for (const p of this.particles) {
-      this.ctx.fillStyle = `rgba(${p.color.r || p.color.bg?.r || 100}, ${p.color.g || p.color.bg?.g || 100}, ${p.color.b || p.color.bg?.b || 100}, ${p.life})`;
+      const c = p.color;
+      this.ctx.fillStyle = `rgba(${c.r}, ${c.g}, ${c.b}, ${p.life})`;
       this.ctx.beginPath();
       this.ctx.arc(p.x, p.y, p.size * p.life, 0, Math.PI * 2);
       this.ctx.fill();
