@@ -792,9 +792,9 @@ ${tasksText}
         todo.vy = (todo.vy / speed) * maxSpeed;
       }
       
-      // 4. 阻尼 - 稳定
-      todo.vx *= 0.9;
-      todo.vy *= 0.9;
+      // 4. 阻尼 - 增大以更快稳定
+      todo.vx *= 0.85;
+      todo.vy *= 0.85;
       
       // 5. 速度很小时归零（静止阈值）
       if (speed < 0.1) {
