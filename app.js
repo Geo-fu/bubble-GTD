@@ -137,7 +137,7 @@ class BubbleTodo {
             console.log('[BubbleGTD] Adding from Firebase:', id, data.text);
             const importance = typeof data.importance === 'number' ? data.importance : 0.5;
             const colorConfig = this.getColorByImportance(importance);
-            const radius = 20 + Math.pow(importance, 2) * 100;
+            const radius = this.getUniqueRadius(data.text || '', importance);
             
             this.todos.push({
               id: id,
@@ -518,6 +518,27 @@ ${tasksText}
     return { bg: { r: 73, g: 80, b: 87 }, text: '#fff' };
   }
   
+  /**
+   * 基于文本生成唯一半径，确保任意两个气泡大小不同
+   */
+  getUniqueRadius(text, importance) {
+    // 简单的字符串哈希
+    let hash = 0;
+    for (let i = 0; i < text.length; i++) {
+      const char = text.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash; // 转为32位整数
+    }
+    
+    // 基于重要性确定基础大小范围
+    const baseRadius = 20 + Math.pow(importance, 2) * 100;
+    
+    // 使用哈希添加微小差异 (-5 到 +5 像素)
+    const variation = (Math.abs(hash) % 100) / 10 - 5;
+    
+    return Math.max(15, baseRadius + variation);
+  }
+  
   async addTodo() {
     const input = document.getElementById('todoInput');
     const text = input.value.trim();
@@ -529,7 +550,7 @@ ${tasksText}
 
     // 立即本地显示（0.1秒内）
     const colorConfig = this.getColorByImportance(quickAnalysis.score);
-    const radius = 20 + Math.pow(quickAnalysis.score, 2) * 100;
+    const radius = this.getUniqueRadius(text, quickAnalysis.score);
 
     // 标记为本地添加，避免 onSnapshot 重复处理
     this.localIds.add(id);
