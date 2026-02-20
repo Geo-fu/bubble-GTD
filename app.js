@@ -10,8 +10,8 @@ class BubbleTodo {
     this.longPressTimer = null;
     
     // API 配置（使用 Kimi API）
-    this.apiKey = 'YOUR_API_KEY'; // 用户需要配置自己的 API Key
-    this.useAI = false; // 默认关闭，需要配置 API Key 后开启
+    this.apiKey = 'YOUR_API_KEY';
+    this.useAI = false;
     
     this.init();
   }
@@ -28,7 +28,6 @@ class BubbleTodo {
       if (e.key === 'Enter') await this.addTodo();
     });
     
-    // 加载保存的待办
     this.loadTodos();
     this.animate();
   }
@@ -40,18 +39,9 @@ class BubbleTodo {
     this.centerY = this.canvas.height / 2;
   }
   
-  /**
-   * 复利思维重要性分析
-   * 返回 0-1 的重要性分数和原因
-   */
   analyzeImportance(text) {
-    // 1. 基础规则分析（本地快速计算）
     const baseScore = this.baseAnalysis(text);
-    
-    // 2. 复利思维深度分析
     const compoundScore = this.compoundAnalysis(text);
-    
-    // 3. 综合评分（加权平均）
     const finalScore = baseScore * 0.3 + compoundScore * 0.7;
     
     return {
@@ -60,14 +50,10 @@ class BubbleTodo {
     };
   }
   
-  /**
-   * 基础规则分析
-   */
   baseAnalysis(text) {
     let score = 0.3;
     const lowerText = text.toLowerCase();
     
-    // 紧急程度关键词
     const urgencyKeywords = {
       high: ['紧急', '马上', '立刻', '现在', 'deadline', '截止', '到期', '超时'],
       medium: ['今天', '明天', '本周', '近期'],
@@ -78,26 +64,19 @@ class BubbleTodo {
     urgencyKeywords.medium.forEach(word => { if (lowerText.includes(word)) score += 0.1; });
     urgencyKeywords.low.forEach(word => { if (lowerText.includes(word)) score -= 0.1; });
     
-    // 人物重要性
     const peopleKeywords = ['老板', '客户', '领导', 'ceo', '总裁', '董事长'];
     peopleKeywords.forEach(word => { if (lowerText.includes(word)) score += 0.15; });
     
-    // 时间具体性
     if (/\d{1,2}[:\：]\d{2}/.test(text)) score += 0.1;
     if (/\d{4}[年\/\-]\d{1,2}[月\/\-]\d{1,2}/.test(text)) score += 0.1;
     
     return Math.min(Math.max(score, 0.1), 1);
   }
   
-  /**
-   * 复利思维分析
-   * 评估事情的长期价值和累积效应
-   */
   compoundAnalysis(text) {
     let score = 0.5;
     const lowerText = text.toLowerCase();
     
-    // 1. 时间复利 - 今天做的事对未来有多大影响
     const timeCompoundKeywords = [
       '学习', '读书', '技能', '提升', '成长', '积累', '沉淀',
       '习惯', '锻炼', '健康', '理财', '投资', '知识', '能力'
@@ -106,7 +85,6 @@ class BubbleTodo {
       if (lowerText.includes(word)) score += 0.15;
     });
     
-    // 2. 边际收益递增 - 越做越有价值
     const marginalGainKeywords = [
       '产品', '系统', '流程', '自动化', '工具', '平台',
       '品牌', '口碑', '影响力', '网络', '生态', '标准'
@@ -115,7 +93,6 @@ class BubbleTodo {
       if (lowerText.includes(word)) score += 0.12;
     });
     
-    // 3. 网络效应 - 连接越多价值越大
     const networkEffectKeywords = [
       '团队', '合作', '协作', '分享', '交流', '会议', '沟通',
       '招聘', '培训', '传承', '文档', '知识库', '方法论'
@@ -124,7 +101,6 @@ class BubbleTodo {
       if (lowerText.includes(word)) score += 0.1;
     });
     
-    // 4. 杠杆效应 - 一份努力多份回报
     const leverageKeywords = [
       '战略', '决策', '方向', '规划', '布局', '资源',
       '融资', '并购', '上市', 'ipo', '扩张', '规模化'
@@ -133,7 +109,6 @@ class BubbleTodo {
       if (lowerText.includes(word)) score += 0.18;
     });
     
-    // 5. 负面复利 - 避免的事情（减少分数）
     const negativeCompoundKeywords = [
       '琐事', '重复', '机械', '无意义', '浪费时间', '内耗',
       '扯皮', '推诿', '拖延', '逃避', '应付', '交差'
@@ -142,30 +117,23 @@ class BubbleTodo {
       if (lowerText.includes(word)) score -= 0.2;
     });
     
-    // 6. 任务类型判断
     if (/会议|开会|讨论|评审/.test(text)) {
-      // 会议通常边际收益低，除非明确有产出
       if (!/决策|确定|批准|通过/.test(text)) {
         score -= 0.1;
       }
     }
     
     if (/回复|答复|确认|知悉/.test(text)) {
-      // 被动响应通常复利价值低
       score -= 0.15;
     }
     
     if (/思考|规划|设计|架构/.test(text)) {
-      // 思考类工作复利价值高
       score += 0.15;
     }
     
     return Math.min(Math.max(score, 0.1), 1);
   }
   
-  /**
-   * 生成重要性原因说明
-   */
   generateReason(text, compoundScore) {
     const reasons = [];
     const lowerText = text.toLowerCase();
@@ -187,9 +155,6 @@ class BubbleTodo {
     return reasons.join(' | ') || '一般任务';
   }
   
-  /**
-   * 调用大模型 API 进行深度分析（可选）
-   */
   async analyzeWithAI(text) {
     if (!this.useAI || !this.apiKey) {
       return null;
@@ -226,7 +191,6 @@ class BubbleTodo {
       const data = await response.json();
       const content = data.choices[0].message.content;
       
-      // 解析 JSON
       const match = content.match(/\{[^}]+\}/);
       if (match) {
         return JSON.parse(match[0]);
@@ -238,11 +202,11 @@ class BubbleTodo {
   }
   
   getColorByImportance(importance) {
-    if (importance > 0.8) return { r: 255, g: 80, b: 80 };   // 深红 - 极高复利
-    if (importance > 0.65) return { r: 255, g: 140, b: 60 }; // 橙红 - 高复利
-    if (importance > 0.5) return { r: 255, g: 200, b: 80 };  // 黄色 - 中等复利
-    if (importance > 0.35) return { r: 100, g: 200, b: 255 }; // 蓝色 - 低复利
-    return { r: 150, g: 150, b: 180 };                        // 灰色 - 极低复利
+    if (importance > 0.8) return { r: 255, g: 80, b: 80 };
+    if (importance > 0.65) return { r: 255, g: 140, b: 60 };
+    if (importance > 0.5) return { r: 255, g: 200, b: 80 };
+    if (importance > 0.35) return { r: 100, g: 200, b: 255 };
+    return { r: 150, g: 150, b: 180 };
   }
   
   async addTodo() {
@@ -250,15 +214,12 @@ class BubbleTodo {
     const text = input.value.trim();
     if (!text) return;
     
-    // 显示加载状态
     const btn = document.getElementById('addBtn');
     btn.textContent = '...';
     btn.disabled = true;
     
-    // 分析重要性
     let analysis = this.analyzeImportance(text);
     
-    // 如果开启了 AI，尝试用 AI 分析
     if (this.useAI) {
       const aiResult = await this.analyzeWithAI(text);
       if (aiResult) {
@@ -267,7 +228,7 @@ class BubbleTodo {
       }
     }
     
-    const radius = 25 + analysis.score * 55; // 25-80
+    const radius = 25 + analysis.score * 55;
     
     const todo = {
       id: Date.now(),
@@ -290,7 +251,6 @@ class BubbleTodo {
     btn.disabled = false;
   }
   
-  // 本地存储
   saveTodos() {
     localStorage.setItem('bubbleTodos', JSON.stringify(this.todos.filter(t => !t.done)));
   }
@@ -306,7 +266,6 @@ class BubbleTodo {
     }
   }
   
-  // ... 其他方法保持不变（getTodoAt, handleStart, handleEnd, completeTodo, updatePhysics, render, animate）
   getTodoAt(x, y) {
     for (let i = this.todos.length - 1; i >= 0; i--) {
       const todo = this.todos[i];
@@ -425,8 +384,6 @@ class BubbleTodo {
       lines.forEach((line, index) => {
         this.ctx.fillText(line, todo.x, startY + index * lineHeight);
       });
-      
-      // 显示重要性原因（小字）
       if (todo.reason && r > 40) {
         this.ctx.fillStyle = `rgba(255, 255, 255, ${0.6 * todo.opacity})`;
         this.ctx.font = `${Math.max(10, r * 0.1)}px sans-serif`;
