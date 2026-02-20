@@ -808,7 +808,7 @@ ${tasksText}
       todo.vy *= 0.9;
       
       // 5. 速度很小时归零（静止阈值）
-      if (speed < 0.1) {
+      if (speed < 0.01) {
         todo.vx = 0;
         todo.vy = 0;
       }
