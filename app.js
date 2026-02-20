@@ -703,34 +703,43 @@ ${tasksText}
       }
     }
     
+    // 计算所有气泡的平均位置（质心）
+    let avgX = 0, avgY = 0, count = 0;
+    for (const todo of this.todos) {
+      if (!todo.done) {
+        avgX += todo.x;
+        avgY += todo.y;
+        count++;
+      }
+    }
+    if (count > 0) {
+      avgX /= count;
+      avgY /= count;
+    } else {
+      avgX = this.centerX;
+      avgY = this.centerY;
+    }
+    
     for (let i = 0; i < this.todos.length; i++) {
       const todo = this.todos[i];
       if (todo.done) continue;
       
       let fx = 0, fy = 0;
       
-      // 1. 只有最大气泡受中心引力（锚定作用）- 增强力度
-      if (todo === maxTodo) {
-        const dx = this.centerX - todo.x;
-        const dy = this.centerY - todo.y;
-        fx += dx * 0.03;
-        fy += dy * 0.03;
+      // 1. 所有气泡都向质心（或屏幕中心） gently 靠拢
+      // 距离越远，引力越大，但有上限
+      const dx = this.centerX - todo.x;
+      const dy = this.centerY - todo.y;
+      const distToCenter = Math.sqrt(dx * dx + dy * dy);
+      
+      // 温和的中心引力：只在距离较远时起作用，且力度有上限
+      if (distToCenter > 100) {
+        const attraction = Math.min((distToCenter - 100) * 0.001, 2);
+        fx += (dx / distToCenter) * attraction;
+        fy += (dy / distToCenter) * attraction;
       }
       
-      // 2. 小气泡被最大气泡吸引（向锚点聚集）- 增强力度
-      if (maxTodo && todo !== maxTodo) {
-        const adx = maxTodo.x - todo.x;
-        const ady = maxTodo.y - todo.y;
-        const distToMax = Math.sqrt(adx * adx + ady * ady);
-        if (distToMax > 0) {
-          // 强吸引力，确保小气泡快速向最大气泡聚集
-          const attraction = Math.min(distToMax * 0.02, 8);
-          fx += (adx / distToMax) * attraction;
-          fy += (ady / distToMax) * attraction;
-        }
-      }
-      
-      // 3. 气泡之间简单排斥（防止重叠）
+      // 2. 气泡之间排斥（防止重叠）
       for (let j = 0; j < this.todos.length; j++) {
         if (i === j) continue;
         const other = this.todos[j];
@@ -743,21 +752,28 @@ ${tasksText}
         
         const minDist = todo.radius + other.radius;
         if (dist < minDist) {
+          // 重叠时推开，力度与重叠程度成正比
           const overlap = minDist - dist;
-          fx -= (odx / dist) * overlap * 1.5;
-          fy -= (ody / dist) * overlap * 1.5;
+          const repulsion = overlap * 0.3; // 温和的排斥
+          fx -= (odx / dist) * repulsion;
+          fy -= (ody / dist) * repulsion;
         }
       }
       
-      // 4. 应用力和阻尼
-      todo.vx += fx;
-      todo.vy += fy;
-      todo.vx *= this.friction;
-      todo.vy *= this.friction;
+      // 3. 应用力和阻尼
+      todo.vx = (todo.vx + fx) * this.friction;
+      todo.vy = (todo.vy + fy) * this.friction;
       
-      // 速度很小时归零
+      // 4. 硬速度限制 - 防止任何气泡跑太快
+      const maxSpeed = 5;
       const speed = Math.sqrt(todo.vx * todo.vx + todo.vy * todo.vy);
-      if (speed < 0.3) {
+      if (speed > maxSpeed) {
+        todo.vx = (todo.vx / speed) * maxSpeed;
+        todo.vy = (todo.vy / speed) * maxSpeed;
+      }
+      
+      // 5. 速度很小时归零（静止阈值）
+      if (speed < 0.2) {
         todo.vx = 0;
         todo.vy = 0;
       }
@@ -765,12 +781,12 @@ ${tasksText}
       todo.x += todo.vx;
       todo.y += todo.vy;
       
-      // 5. 边界限制
-      const margin = todo.radius + 20;
-      if (todo.x < margin) { todo.x = margin; todo.vx *= -0.5; }
-      if (todo.x > this.canvas.width - margin) { todo.x = this.canvas.width - margin; todo.vx *= -0.5; }
-      if (todo.y < margin) { todo.y = margin; todo.vy *= -0.5; }
-      if (todo.y > this.canvas.height - margin) { todo.y = this.canvas.height - margin; todo.vy *= -0.5; }
+      // 6. 边界限制
+      const margin = todo.radius + 10;
+      if (todo.x < margin) { todo.x = margin; todo.vx = 0; }
+      if (todo.x > this.canvas.width - margin) { todo.x = this.canvas.width - margin; todo.vx = 0; }
+      if (todo.y < margin) { todo.y = margin; todo.vy = 0; }
+      if (todo.y > this.canvas.height - margin) { todo.y = this.canvas.height - margin; todo.vy = 0; }
     }
     
     // 粒子动画
