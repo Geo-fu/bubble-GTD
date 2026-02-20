@@ -34,17 +34,6 @@ class BubbleTodo {
     this.repulsionBase = 300;
     this.attractionBase = 0.0008;
     
-    // API 配置
-    this.apiKey = 'sk-bykEHxDd8e40RqS1jjywffXa2FwbFpdKpDzbT7Q1WyTk4kxY';
-    this.useAI = true;
-    this.aiCache = new Map();
-    this.loadCache();
-    
-    // API 限流控制
-    this.apiQueue = [];
-    this.apiProcessing = false;
-    this.apiDelay = 1000; // 请求间隔 1 秒
-    
     this.init();
   }
   
@@ -81,10 +70,10 @@ class BubbleTodo {
     
     const q = query(collection(db, 'users', this.userId, 'todos'), orderBy('createdAt', 'desc'));
     
-    // 1. 先获取现有数据
+    // 先获取现有数据
     try {
       const snapshot = await getDocs(q);
-      this.todos = []; // 清空本地数据
+      this.todos = [];
       
       snapshot.forEach((doc) => {
         const data = doc.data();
@@ -114,14 +103,13 @@ class BubbleTodo {
       console.error('Load failed:', e);
     }
     
-    // 2. 然后监听实时更新
+    // 监听实时更新
     this.unsubscribe = onSnapshot(q, (snapshot) => {
       snapshot.docChanges().forEach((change) => {
         const data = change.doc.data();
         const id = change.doc.id;
         
         if (change.type === 'added') {
-          // 检查是否已存在（避免重复添加初始数据）
           if (!this.todos.find(t => t.id === id)) {
             const colorConfig = this.getColorByImportance(data.importance);
             const radius = 20 + Math.pow(data.importance, 2) * 100;
@@ -143,6 +131,19 @@ class BubbleTodo {
               isAnalyzing: false
             });
           }
+        } else if (change.type === 'modified') {
+          // AI 分析完成后更新
+          const index = this.todos.findIndex(t => t.id === id);
+          if (index !== -1) {
+            const todo = this.todos[index];
+            todo.importance = data.importance;
+            todo.targetImportance = data.importance;
+            todo.reason = data.reason;
+            todo.targetRadius = 20 + Math.pow(data.importance, 2) * 100;
+            const colorConfig = this.getColorByImportance(data.importance);
+            todo.color = colorConfig.bg;
+            todo.textColor = colorConfig.text;
+          }
         } else if (change.type === 'removed') {
           const index = this.todos.findIndex(t => t.id === id);
           if (index !== -1 && !this.todos[index].done) {
@@ -163,161 +164,50 @@ class BubbleTodo {
     this.centerY = this.canvas.height / 2;
   }
   
-  // 缓存管理
-  loadCache() {
-    try {
-      const saved = localStorage.getItem('bubbleAICache');
-      if (saved) {
-        const data = JSON.parse(saved);
-        this.aiCache = new Map(data);
-      }
-    } catch (e) {
-      this.aiCache = new Map();
-    }
-  }
-  
-  saveCache() {
-    try {
-      const entries = Array.from(this.aiCache.entries());
-      if (entries.length > 100) {
-        entries.splice(0, entries.length - 100);
-      }
-      localStorage.setItem('bubbleAICache', JSON.stringify(entries));
-    } catch (e) {
-      console.log('Save cache failed:', e);
-    }
-  }
-  
   /**
-   * 调用 Kimi API 进行智能语义分析（带缓存和限流）
-   */
-  async analyzeWithAI(text) {
-    const cacheKey = text.trim().toLowerCase();
-    
-    if (this.aiCache.has(cacheKey)) {
-      return this.aiCache.get(cacheKey);
-    }
-    
-    // 加入队列
-    return new Promise((resolve) => {
-      this.apiQueue.push({ text, cacheKey, resolve });
-      this.processApiQueue();
-    });
-  }
-  
-  async processApiQueue() {
-    if (this.apiProcessing || this.apiQueue.length === 0) return;
-    
-    this.apiProcessing = true;
-    const { text, cacheKey, resolve } = this.apiQueue.shift();
-    
-    let retries = 3;
-    let result = null;
-    
-    while (retries > 0) {
-      try {
-        result = await this.callKimiAPI(text);
-        if (result) break;
-      } catch (e) {
-        if (e.message.includes('429')) {
-          console.log('Rate limited, waiting...');
-          await this.sleep(2000 * (4 - retries)); // 递增等待
-        }
-      }
-      retries--;
-    }
-    
-    // 如果 API 失败，使用本地分析
-    if (!result) {
-      result = this.localAnalyze(text);
-    }
-    
-    // 缓存结果
-    this.aiCache.set(cacheKey, result);
-    this.saveCache();
-    
-    resolve(result);
-    
-    this.apiProcessing = false;
-    
-    // 延迟处理下一个请求
-    await this.sleep(this.apiDelay);
-    this.processApiQueue();
-  }
-  
-  async callKimiAPI(text) {
-    const response = await fetch('https://api.moonshot.cn/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${this.apiKey}`
-      },
-      body: JSON.stringify({
-        model: 'kimi-k2.5',
-        messages: [{
-          role: 'system',
-          content: `你是一个任务重要性分析专家。请以JSON返回：{"score": 0.85, "reason": "💰 金融高价值"}`
-        }, {
-          role: 'user',
-          content: `分析："${text}"`
-        }],
-        temperature: 0.3,
-        max_tokens: 80
-      })
-    });
-    
-    if (response.status === 429) {
-      throw new Error('429 Rate limited');
-    }
-    
-    if (!response.ok) return null;
-    
-    const data = await response.json();
-    const content = data.choices[0].message.content;
-    
-    const match = content.match(/\{[\s\S]*\}/);
-    if (match) {
-      const result = JSON.parse(match[0]);
-      return {
-        score: Math.min(Math.max(result.score, 0.1), 1),
-        reason: result.reason || 'AI评估'
-      };
-    }
-    return null;
-  }
-  
-  sleep(ms) {
-    return new Promise(resolve => setTimeout(resolve, ms));
-  }
-  
-  /**
-   * 本地快速评估（备用）
+   * 本地快速评估（AI 分析在后台每8小时执行一次）
    */
   localAnalyze(text) {
     let score = 0.5;
     const reasons = [];
     const lowerText = text.toLowerCase();
     
-    const financeWords = ['融资', '并购', '上市', 'ipo', '尽调', '尽职调查', '审计', '估值', '投资', '风控'];
+    // 金融/投资 - 高价值
+    const financeWords = ['融资', '并购', '上市', 'ipo', '尽调', '尽职调查', '审计', '估值', '投资', '风控', '合规'];
     if (financeWords.some(w => lowerText.includes(w))) {
       score += 0.25;
       reasons.push('💰 金融/投资');
     }
     
-    const businessWords = ['谈判', '签约', '合作', '客户', '战略', '决策'];
+    // 商业关键
+    const businessWords = ['谈判', '签约', '合作', '客户', '战略', '决策', '规划'];
     if (businessWords.some(w => lowerText.includes(w))) {
       score += 0.15;
       reasons.push('💼 商业关键');
     }
     
-    if (/紧急|马上|立刻|deadline|截止/.test(lowerText)) {
+    // 复利相关
+    const compoundWords = ['学习', '读书', '技能', '产品', '系统', '团队', '流程'];
+    if (compoundWords.some(w => lowerText.includes(w))) {
+      score += 0.1;
+      reasons.push('📈 复利');
+    }
+    
+    // 紧急
+    if (/紧急|马上|立刻|deadline|截止|今天/.test(lowerText)) {
       score += 0.1;
       reasons.push('⏰ 紧急');
     }
     
+    // 低价值标记
+    if (/回复|确认|收到|好的|谢谢/.test(lowerText) && reasons.length === 0) {
+      score -= 0.1;
+    }
+    
     return {
-      score: Math.min(Math.max(score, 0.3), 0.9),
-      reason: reasons.join(' | ') || '一般任务'
+      score: Math.min(Math.max(score, 0.2), 0.85), // 本地分析最高 0.85，留空间给 AI
+      reason: reasons.join(' | ') || '一般任务',
+      needsAI: reasons.length === 0 || score > 0.7 // 需要 AI 进一步分析
     };
   }
   
@@ -342,8 +232,8 @@ class BubbleTodo {
     btn.textContent = '...';
     btn.disabled = true;
     
-    let analysis = await this.analyzeWithAI(text);
-    if (!analysis) analysis = this.localAnalyze(text);
+    // 只使用本地分析，AI 分析在后台每8小时执行
+    const analysis = this.localAnalyze(text);
     
     // 保存到 Firebase
     try {
@@ -351,6 +241,8 @@ class BubbleTodo {
         text: text,
         importance: analysis.score,
         reason: analysis.reason,
+        needsAI: analysis.needsAI, // 标记需要 AI 分析
+        aiAnalyzed: false, // AI 尚未分析
         createdAt: serverTimestamp()
       });
     } catch (e) {
@@ -417,7 +309,6 @@ class BubbleTodo {
   async completeTodo(todo) {
     if (todo.done) return;
     
-    // 从 Firebase 删除
     if (this.userId) {
       try {
         await deleteDoc(doc(db, 'users', this.userId, 'todos', todo.id));
