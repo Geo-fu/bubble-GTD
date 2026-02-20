@@ -968,14 +968,6 @@ ${tasksText}
         this.ctx.fillText(todo.reason, todo.x, startY + lines.length * lineHeight + 8);
       }
     }
-    
-    for (const p of this.particles) {
-      const c = p.color;
-      this.ctx.fillStyle = `rgba(${c.r}, ${c.g}, ${c.b}, ${p.life})`;
-      this.ctx.beginPath();
-      this.ctx.arc(p.x, p.y, p.size * p.life, 0, Math.PI * 2);
-      this.ctx.fill();
-    }
   }
   
   animate() {
