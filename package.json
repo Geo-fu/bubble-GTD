@@ -2,7 +2,7 @@
   "name": "bubble-gtd",
   "version": "1.0.0",
   "description": "",
-  "main": "analyze-job.js",
+  "main": "app.js",
   "scripts": {
     "test": "playwright test",
     "test:ui": "playwright test --ui",

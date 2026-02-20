@@ -54,27 +54,12 @@ else
 fi
 echo ""
 
-# 测试 4: 检查后台分析脚本
-echo "✓ 测试 4: 检查后台分析脚本"
-if [ -f "analyze-job.js" ]; then
-    echo "  ✓ analyze-job.js 存在"
+# 测试 4: 检查依赖
+echo "✓ 测试 4: 检查依赖"
+if [ -d "node_modules/playwright" ]; then
+    echo "  ✓ playwright 已安装"
 else
-    echo "  ✗ analyze-job.js 缺失"
-fi
-
-if [ -f "serviceAccountKey.json" ]; then
-    echo "  ✓ serviceAccountKey.json 存在"
-else
-    echo "  ✗ serviceAccountKey.json 缺失"
-fi
-echo ""
-
-# 测试 5: 检查依赖
-echo "✓ 测试 5: 检查依赖"
-if [ -d "node_modules/firebase-admin" ]; then
-    echo "  ✓ firebase-admin 已安装"
-else
-    echo "  ✗ firebase-admin 未安装"
+    echo "  ✗ playwright 未安装"
 fi
 echo ""
 
@@ -87,6 +72,3 @@ echo "  2. 添加任务 '尽职调查'，检查是否显示为高重要性（红
 echo "  3. 添加任务 '回复邮件'，检查是否显示为低重要性"
 echo "  4. 刷新页面，检查数据是否持久化"
 echo "  5. 长按气泡，检查是否能完成任务"
-echo ""
-echo "🔧 如需运行后台 AI 分析："
-echo "  node analyze-job.js"
