@@ -693,19 +693,44 @@ ${tasksText}
   updatePhysics() {
     this.todos.forEach(todo => { if (!todo.done) this.updateTodoSize(todo); });
     
+    // 找到最大气泡（重要性最高）作为锚点
+    let maxTodo = null;
+    let maxImportance = -1;
+    for (const todo of this.todos) {
+      if (!todo.done && todo.importance > maxImportance) {
+        maxImportance = todo.importance;
+        maxTodo = todo;
+      }
+    }
+    
     for (let i = 0; i < this.todos.length; i++) {
       const todo = this.todos[i];
       if (todo.done) continue;
       
       let fx = 0, fy = 0;
       
-      // 1. 向屏幕中心聚集 - 适中力度
-      const dx = this.centerX - todo.x;
-      const dy = this.centerY - todo.y;
-      fx += dx * 0.008;
-      fy += dy * 0.008;
+      // 1. 只有最大气泡受中心引力（锚定作用）
+      if (todo === maxTodo) {
+        const dx = this.centerX - todo.x;
+        const dy = this.centerY - todo.y;
+        fx += dx * 0.01;
+        fy += dy * 0.01;
+      }
       
-      // 2. 气泡之间简单排斥（防止重叠）
+      // 2. 小气泡被最大气泡吸引（向锚点聚集）
+      if (maxTodo && todo !== maxTodo) {
+        const adx = maxTodo.x - todo.x;
+        const ady = maxTodo.y - todo.y;
+        const distToMax = Math.sqrt(adx * adx + ady * ady);
+        if (distToMax > 0) {
+          // 吸引力随距离增加而增强，但远距离时减弱
+          const attraction = Math.min(distToMax * 0.005, 3);
+          fx += (adx / distToMax) * attraction;
+          fy += (ady / distToMax) * attraction;
+        }
+      }
+      
+      // 3. 气泡之间简单排斥（防止重叠）
       for (let j = 0; j < this.todos.length; j++) {
         if (i === j) continue;
         const other = this.todos[j];
@@ -719,20 +744,20 @@ ${tasksText}
         const minDist = todo.radius + other.radius;
         if (dist < minDist) {
           const overlap = minDist - dist;
-          fx -= (odx / dist) * overlap * 1.2;  // 适中排斥
-          fy -= (ody / dist) * overlap * 1.2;
+          fx -= (odx / dist) * overlap * 1.5;
+          fy -= (ody / dist) * overlap * 1.5;
         }
       }
       
-      // 3. 应用力和阻尼
+      // 4. 应用力和阻尼
       todo.vx += fx;
       todo.vy += fy;
       todo.vx *= this.friction;
       todo.vy *= this.friction;
       
-      // 速度很小时直接归零，防止简谐振动
+      // 速度很小时归零
       const speed = Math.sqrt(todo.vx * todo.vx + todo.vy * todo.vy);
-      if (speed < 0.5) {
+      if (speed < 0.3) {
         todo.vx = 0;
         todo.vy = 0;
       }
@@ -740,7 +765,7 @@ ${tasksText}
       todo.x += todo.vx;
       todo.y += todo.vy;
       
-      // 4. 边界限制
+      // 5. 边界限制
       const margin = todo.radius + 20;
       if (todo.x < margin) { todo.x = margin; todo.vx *= -0.5; }
       if (todo.x > this.canvas.width - margin) { todo.x = this.canvas.width - margin; todo.vx *= -0.5; }
