@@ -56,7 +56,9 @@ class BubbleTodo {
     const q = query(collection(db, 'todos'), orderBy('createdAt', 'desc'));
     
     // 只使用实时监听，不阻塞加载
+    console.log('[BubbleGTD] Setting up Firebase listener...');
     this.unsubscribe = onSnapshot(q, (snapshot) => {
+      console.log('[BubbleGTD] Snapshot received, docs count:', snapshot.docs.length);
       // 处理初始数据和变更
       const currentIds = new Set();
       
@@ -116,6 +118,13 @@ class BubbleTodo {
           this.todos[i].done = true;
           this.triggerExplosion(this.todos[i]);
         }
+      }
+    }, (error) => {
+      console.error('[BubbleGTD] Snapshot error:', error.code, error.message);
+      const hint = document.querySelector('.hint');
+      if (hint) {
+        hint.textContent = '数据加载失败: ' + error.message;
+        hint.style.color = '#ff6b6b';
       }
     });
     
@@ -224,14 +233,30 @@ class BubbleTodo {
     input.value = '';
     
     // 后台同步到 Firebase（不阻塞）
-    setDoc(doc(db, 'todos', id), {
+    console.log('[BubbleGTD] Saving to Firebase:', id, text);
+    const todoRef = doc(db, 'todos', id);
+    setDoc(todoRef, {
       text: text,
       importance: analysis.score,
       reason: analysis.reason,
       needsAI: analysis.needsAI,
       aiAnalyzed: false,
       createdAt: serverTimestamp()
-    }).catch(e => console.error('Save failed:', e));
+    }).then(() => {
+      console.log('[BubbleGTD] Saved successfully:', id);
+    }).catch(e => {
+      console.error('[BubbleGTD] Save failed:', e.code, e.message);
+      // 显示错误给用户
+      const hint = document.querySelector('.hint');
+      if (hint) {
+        hint.textContent = '保存失败: ' + e.message;
+        hint.style.color = '#ff6b6b';
+        setTimeout(() => {
+          hint.textContent = '点击输入待办 · 长按气泡完成';
+          hint.style.color = 'rgba(255, 255, 255, 0.6)';
+        }, 3000);
+      }
+    });
   }
   
   triggerExplosion(todo) {
