@@ -158,11 +158,16 @@ class BubbleTodo {
   }
   
   getColorByImportance(importance) {
-    if (importance > 0.8) return { r: 255, g: 80, b: 80 };
-    if (importance > 0.65) return { r: 255, g: 140, b: 60 };
-    if (importance > 0.5) return { r: 255, g: 200, b: 80 };
-    if (importance > 0.35) return { r: 100, g: 200, b: 255 };
-    return { r: 150, g: 150, b: 180 };
+    // 8级颜色梯度，从灰到红
+    if (importance > 0.9) return { r: 255, g: 50, b: 50 };    // 深红 - 极高复利
+    if (importance > 0.8) return { r: 255, g: 80, b: 60 };    // 红橙
+    if (importance > 0.7) return { r: 255, g: 120, b: 70 };   // 橙红
+    if (importance > 0.6) return { r: 255, g: 160, b: 80 };   // 橙色
+    if (importance > 0.5) return { r: 255, g: 200, b: 100 };  // 黄橙
+    if (importance > 0.4) return { r: 255, g: 230, b: 150 };  // 黄色
+    if (importance > 0.3) return { r: 150, g: 220, b: 255 };  // 浅蓝
+    if (importance > 0.2) return { r: 120, g: 180, b: 220 };  // 蓝色
+    return { r: 140, g: 140, b: 160 };                        // 灰蓝 - 极低
   }
   
   addTodo() {
