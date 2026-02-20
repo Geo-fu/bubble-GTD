@@ -1,6 +1,6 @@
 // Firebase 配置
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-app.js";
-import { getFirestore, collection, doc, setDoc, deleteDoc, onSnapshot, query, orderBy, serverTimestamp, getDocs } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-firestore.js";
+import { getFirestore, collection, doc, setDoc, deleteDoc, onSnapshot, query, serverTimestamp } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-firestore.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyCsdgcHag_08oDCn6pGZU9Sq4tiz762IUU",
@@ -53,7 +53,8 @@ class BubbleTodo {
   
   async loadTodosFromFirebase() {
     // 使用简单的集合结构，所有人共享
-    const q = query(collection(db, 'todos'), orderBy('createdAt', 'desc'));
+    // 暂时不使用 orderBy，避免索引问题
+    const q = query(collection(db, 'todos'));
     
     // 只使用实时监听，不阻塞加载
     console.log('[BubbleGTD] Setting up Firebase listener...');
