@@ -21,7 +21,7 @@ class BubbleTodo {
     this.ctx = this.canvas.getContext('2d');
     this.todos = [];
     this.particles = [];
-    this.friction = 0.92;  // 增加阻尼，让气泡更快稳定
+    this.friction = 0.85;  // 显著增加阻尼，更快稳定
     this.centerAttraction = 0.0003;
     this.touch = { x: 0, y: 0, isDown: false, target: null };
     this.longPressTimer = null;
@@ -666,31 +666,51 @@ ${tasksText}
         // 计算任务间相关性（与重要性无关）
         const relation = this.getTaskRelation(todo, other);
         
-        // 基础排斥力（防止重叠）- 与相关性无关
-        const minDist = todo.radius + other.radius + 15;
+        // 基础排斥力（防止重叠）
+        const minDist = todo.radius + other.radius + 10;
         if (dist < minDist) {
-          const repulsionForce = this.repulsionBase * 0.8 / (dist + 1);
+          // 重叠时强排斥，快速分离
+          const overlap = minDist - dist;
+          const repulsionForce = overlap * 2; // 与重叠量成正比
           fx -= (dx / dist) * repulsionForce;
           fy -= (dy / dist) * repulsionForce;
         }
         
-        // 相关性引力/斥力 - 强吸引、强排斥
-        // 相关性高 (>0.5) = 强吸引，相关性低 (<0.3) = 强排斥
-        if (relation > 0.5 && dist > minDist && dist < 500) {
-          // 高相关性强吸引 - 距离越近吸引力指数增长
-          const attractionForce = this.attractionBase * relation * relation * (500 - dist) * 2;
+        // 相关性引力/斥力 - 快速聚类并稳定
+        // 相关性高 (>0.5) = 吸引，相关性低 (<0.3) = 排斥
+        if (relation > 0.5 && dist > minDist && dist < 400) {
+          // 高相关性吸引 - 使用平滑曲线，距离适中时力最大
+          const optimalDist = minDist + 30; // 最佳距离
+          const distFromOptimal = Math.abs(dist - optimalDist);
+          const attractionForce = this.attractionBase * relation * Math.max(0, 100 - distFromOptimal);
           fx += (dx / dist) * attractionForce;
           fy += (dy / dist) * attractionForce;
-        } else if (relation < 0.3 && dist < 250) {
-          // 低相关性强排斥 - 让不相关任务远离
-          const repulsionForce = this.repulsionBase * 0.5 * (250 - dist) / 250;
+        } else if (relation < 0.3 && dist < 200) {
+          // 低相关性排斥 - 短距离强排斥
+          const repulsionForce = this.repulsionBase * 0.3 * (200 - dist) / 200;
           fx -= (dx / dist) * repulsionForce;
           fy -= (dy / dist) * repulsionForce;
         }
       }
       
+      // 应用力并限制最大速度，防止震荡
       todo.vx += fx;
       todo.vy += fy;
+      
+      // 速度限制 - 防止过快移动导致震荡
+      const maxSpeed = 8;
+      const speed = Math.sqrt(todo.vx * todo.vx + todo.vy * todo.vy);
+      if (speed > maxSpeed) {
+        todo.vx = (todo.vx / speed) * maxSpeed;
+        todo.vy = (todo.vy / speed) * maxSpeed;
+      }
+      
+      // 当速度很小时直接归零，帮助稳定
+      if (speed < 0.1) {
+        todo.vx = 0;
+        todo.vy = 0;
+      }
+      
       todo.vx *= this.friction;
       todo.vy *= this.friction;
       todo.x += todo.vx;
