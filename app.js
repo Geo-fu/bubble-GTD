@@ -759,45 +759,24 @@ ${tasksText}
         }
       }
       
-      // 2. 气泡之间排斥（防止重叠）
-      for (let j = 0; j < this.todos.length; j++) {
-        if (i === j) continue;
-        const other = this.todos[j];
-        if (other.done) continue;
-        
-        const odx = other.x - todo.x;
-        const ody = other.y - todo.y;
-        const dist = Math.sqrt(odx * odx + ody * ody);
-        if (!isFinite(dist) || dist === 0) continue;
-        
-        const minDist = todo.radius + other.radius;
-        if (dist < minDist) {
-          // 重叠时推开，力度适中
-          const overlap = minDist - dist;
-          const repulsion = overlap * 0.8; // 适中排斥，有动态感
-          fx -= (odx / dist) * repulsion;
-          fy -= (ody / dist) * repulsion;
-        }
-      }
-      
-      // 3. 应用力
+      // 2. 应用力
       todo.vx += fx;
       todo.vy += fy;
       
-      // 4. 速度限制 - 允许一定速度，有动态感
-      const maxSpeed = 12;
+      // 3. 速度限制
+      const maxSpeed = 8;
       const speed = Math.sqrt(todo.vx * todo.vx + todo.vy * todo.vy);
       if (speed > maxSpeed) {
         todo.vx = (todo.vx / speed) * maxSpeed;
         todo.vy = (todo.vy / speed) * maxSpeed;
       }
       
-      // 5. 阻尼 - 5秒内稳定
-      todo.vx *= 0.92;
-      todo.vy *= 0.92;
+      // 4. 阻尼 - 稳定
+      todo.vx *= 0.9;
+      todo.vy *= 0.9;
       
-      // 6. 速度很小时归零（静止阈值）
-      if (speed < 0.15) {
+      // 5. 速度很小时归零（静止阈值）
+      if (speed < 0.1) {
         todo.vx = 0;
         todo.vy = 0;
       }
