@@ -57,18 +57,24 @@ class BubbleTodo {
     
     // 只使用实时监听，不阻塞加载
     this.unsubscribe = onSnapshot(q, (snapshot) => {
-      snapshot.docChanges().forEach((change) => {
-        const data = change.doc.data();
-        const id = change.doc.id;
+      // 处理初始数据和变更
+      const currentIds = new Set();
+      
+      snapshot.docs.forEach((doc) => {
+        const data = doc.data();
+        const id = doc.id;
+        currentIds.add(id);
         
-        if (change.type === 'added') {
+        // 检查是否已存在
+        const existingIndex = this.todos.findIndex(t => t.id === id);
+        
+        if (existingIndex === -1) {
+          // 新文档 - 添加
           // 跳过本地已添加的（避免重复）
           if (this.localIds.has(id)) {
-            this.localIds.delete(id); // 清理
+            this.localIds.delete(id);
             return;
           }
-          // 避免重复添加
-          if (this.todos.find(t => t.id === id)) return;
           
           const colorConfig = this.getColorByImportance(data.importance);
           const radius = 20 + Math.pow(data.importance, 2) * 100;
@@ -89,11 +95,10 @@ class BubbleTodo {
             done: false, opacity: 1, scale: 1,
             isAnalyzing: false
           });
-        } else if (change.type === 'modified') {
-          // AI 分析完成后更新
-          const index = this.todos.findIndex(t => t.id === id);
-          if (index !== -1) {
-            const todo = this.todos[index];
+        } else {
+          // 已存在 - 更新数据（AI分析结果等）
+          const todo = this.todos[existingIndex];
+          if (todo.importance !== data.importance || todo.reason !== data.reason) {
             todo.importance = data.importance;
             todo.targetImportance = data.importance;
             todo.reason = data.reason;
@@ -102,14 +107,16 @@ class BubbleTodo {
             todo.color = colorConfig.bg;
             todo.textColor = colorConfig.text;
           }
-        } else if (change.type === 'removed') {
-          const index = this.todos.findIndex(t => t.id === id);
-          if (index !== -1 && !this.todos[index].done) {
-            this.todos[index].done = true;
-            this.triggerExplosion(this.todos[index]);
-          }
         }
       });
+      
+      // 删除本地不存在于 Firebase 的任务
+      for (let i = this.todos.length - 1; i >= 0; i--) {
+        if (!currentIds.has(this.todos[i].id) && !this.todos[i].done) {
+          this.todos[i].done = true;
+          this.triggerExplosion(this.todos[i]);
+        }
+      }
     });
     
     this.animate();
