@@ -17,6 +17,11 @@ class BubbleTodo {
     this.apiKey = 'sk-bykEHxDd8e40RqS1jjywffXa2FwbFpdKpDzbT7Q1WyTk4kxY';
     this.useAI = true;
     
+    // 缓存：已分析的任务文本 -> 结果
+    this.aiCache = new Map();
+    // 从 localStorage 加载缓存
+    this.loadCache();
+    
     this.init();
   }
   
@@ -44,9 +49,17 @@ class BubbleTodo {
   }
   
   /**
-   * 调用 Kimi API 进行智能语义分析
+   * 调用 Kimi API 进行智能语义分析（带缓存）
    */
   async analyzeWithAI(text) {
+    const cacheKey = text.trim().toLowerCase();
+    
+    // 1. 检查缓存
+    if (this.aiCache.has(cacheKey)) {
+      console.log('Cache hit:', text);
+      return this.aiCache.get(cacheKey);
+    }
+    
     try {
       const response = await fetch('https://api.moonshot.cn/v1/chat/completions', {
         method: 'POST',
@@ -58,28 +71,13 @@ class BubbleTodo {
           model: 'kimi-k2.5',
           messages: [{
             role: 'system',
-            content: `你是一个专业的任务重要性分析专家，基于复利思维评估任务。
-
-请深入理解任务的语义和专业背景：
-- "尽职调查"是投资/并购前的关键调查，涉及重大财务决策，重要性很高
-- "审计"、"风控"、"合规"是金融核心活动
-- "融资"、"并购"、"IPO"具有极高杠杆效应
-- "谈判"、"签约"具有直接商业价值
-- 区分日常事务和战略级任务
-
-分析维度：
-1. 时间复利：对未来有多大累积效应
-2. 边际收益：是否越做越有价值  
-3. 网络效应：是否产生连接价值
-4. 杠杆效应：一份努力能否产生多份回报
-
-请以JSON返回：{"score": 0.85, "reason": "💰 金融高价值 | 🎯 杠杆效应"}`
+            content: `你是一个专业的任务重要性分析专家，基于复利思维评估任务。请以JSON返回：{"score": 0.85, "reason": "💰 金融高价值"}`
           }, {
             role: 'user',
-            content: `分析这个任务："${text}"`
+            content: `分析："${text}"`
           }],
           temperature: 0.3,
-          max_tokens: 150
+          max_tokens: 100
         })
       });
       
@@ -91,15 +89,48 @@ class BubbleTodo {
       const match = content.match(/\{[\s\S]*\}/);
       if (match) {
         const result = JSON.parse(match[0]);
-        return {
+        const analysis = {
           score: Math.min(Math.max(result.score, 0.1), 1),
           reason: result.reason || 'AI评估'
         };
+        
+        // 2. 存入缓存
+        this.aiCache.set(cacheKey, analysis);
+        this.saveCache();
+        
+        return analysis;
       }
     } catch (e) {
       console.log('AI analysis failed:', e);
     }
     return null;
+  }
+  
+  // 缓存管理
+  loadCache() {
+    try {
+      const saved = localStorage.getItem('bubbleAICache');
+      if (saved) {
+        const data = JSON.parse(saved);
+        this.aiCache = new Map(data);
+        console.log('Loaded cache:', this.aiCache.size, 'items');
+      }
+    } catch (e) {
+      this.aiCache = new Map();
+    }
+  }
+  
+  saveCache() {
+    try {
+      // 只保留最近 100 条缓存
+      const entries = Array.from(this.aiCache.entries());
+      if (entries.length > 100) {
+        entries.splice(0, entries.length - 100);
+      }
+      localStorage.setItem('bubbleAICache', JSON.stringify(entries));
+    } catch (e) {
+      console.log('Save cache failed:', e);
+    }
   }
   
   /**
@@ -202,11 +233,19 @@ class BubbleTodo {
       const texts = JSON.parse(saved);
       for (const text of texts) {
         if (typeof text === 'string') {
-          // 重新用 AI 评估
-          let analysis = await this.analyzeWithAI(text);
-          if (!analysis) analysis = this.localAnalyze(text);
+          const cacheKey = text.trim().toLowerCase();
+          let analysis;
+          
+          // 优先使用缓存，没有则本地分析
+          if (this.aiCache.has(cacheKey)) {
+            analysis = this.aiCache.get(cacheKey);
+          } else {
+            analysis = this.localAnalyze(text);
+          }
           
           const radius = 20 + Math.pow(analysis.score, 2) * 100;
+          const colorConfig = this.getColorByImportance(analysis.score);
+          
           this.todos.push({
             id: Date.now() + Math.random(),
             text: text,
@@ -218,8 +257,8 @@ class BubbleTodo {
             x: this.centerX + (Math.random() - 0.5) * 200,
             y: this.centerY + (Math.random() - 0.5) * 200,
             vx: 0, vy: 0,
-            color: this.getColorByImportance(analysis.score).bg,
-            textColor: this.getColorByImportance(analysis.score).text,
+            color: colorConfig.bg,
+            textColor: colorConfig.text,
             done: false, opacity: 1, scale: 1,
             isAnalyzing: false
           });
