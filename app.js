@@ -29,8 +29,8 @@ class BubbleTodo {
     this.localIds = new Set(); // 跟踪本地添加的 ID，避免重复
     
     // 物理参数
-    this.repulsionBase = 400;  // 增加排斥力，让气泡距离更远
-    this.attractionBase = 0.002;  // 增大相关性吸引力
+    this.repulsionBase = 600;  // 显著增加排斥力，让不相关任务距离更远
+    this.attractionBase = 0.008;  // 大幅增大相关性吸引力，形成紧密簇
     
     // 任务间相关性数据（由 Gemini 分析）
     this.relations = [];
@@ -667,23 +667,23 @@ ${tasksText}
         const relation = this.getTaskRelation(todo, other);
         
         // 基础排斥力（防止重叠）- 与相关性无关
-        const minDist = todo.radius + other.radius + 20;
+        const minDist = todo.radius + other.radius + 15;
         if (dist < minDist) {
-          const repulsionForce = this.repulsionBase * 0.5 / (dist * dist + 10);
+          const repulsionForce = this.repulsionBase * 0.8 / (dist + 1);
           fx -= (dx / dist) * repulsionForce;
           fy -= (dy / dist) * repulsionForce;
         }
         
-        // 相关性引力/斥力 - 更温和的力
-        // 相关性高 (>0.6) = 吸引，相关性低 (<0.4) = 排斥
-        if (relation > 0.6 && dist > minDist && dist < 400) {
-          // 高相关性吸引 - 增大吸引力
-          const attractionForce = this.attractionBase * relation * (400 - dist) * 0.8;
+        // 相关性引力/斥力 - 强吸引、强排斥
+        // 相关性高 (>0.5) = 强吸引，相关性低 (<0.3) = 强排斥
+        if (relation > 0.5 && dist > minDist && dist < 500) {
+          // 高相关性强吸引 - 距离越近吸引力指数增长
+          const attractionForce = this.attractionBase * relation * relation * (500 - dist) * 2;
           fx += (dx / dist) * attractionForce;
           fy += (dy / dist) * attractionForce;
-        } else if (relation < 0.4 && dist < 150) {
-          // 低相关性排斥 - 更温和
-          const repulsionForce = this.repulsionBase * 0.15 * (150 - dist) / 150;
+        } else if (relation < 0.3 && dist < 250) {
+          // 低相关性强排斥 - 让不相关任务远离
+          const repulsionForce = this.repulsionBase * 0.5 * (250 - dist) / 250;
           fx -= (dx / dist) * repulsionForce;
           fy -= (dy / dist) * repulsionForce;
         }
