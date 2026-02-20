@@ -21,7 +21,7 @@ class BubbleTodo {
     this.ctx = this.canvas.getContext('2d');
     this.todos = [];
     this.particles = [];
-    this.friction = 0.98;
+    this.friction = 0.92;  // 增加阻尼，让气泡更快稳定
     this.centerAttraction = 0.0003;
     this.touch = { x: 0, y: 0, isDown: false, target: null };
     this.longPressTimer = null;
@@ -592,7 +592,7 @@ ${tasksText}
       
       let fx = 0, fy = 0;
       
-      const centerForce = this.centerAttraction * (0.5 + todo.importance * 1.5);
+      const centerForce = this.centerAttraction * (0.3 + todo.importance * 0.7);
       fx += (this.centerX - todo.x) * centerForce;
       fy += (this.centerY - todo.y) * centerForce;
       
@@ -610,23 +610,23 @@ ${tasksText}
         const relation = this.getTaskRelation(todo, other);
         
         // 基础排斥力（防止重叠）- 与相关性无关
-        const minDist = todo.radius + other.radius + 25;
+        const minDist = todo.radius + other.radius + 20;
         if (dist < minDist) {
-          const repulsionForce = this.repulsionBase / (dist * dist + 1);
+          const repulsionForce = this.repulsionBase * 0.5 / (dist * dist + 10);
           fx -= (dx / dist) * repulsionForce;
           fy -= (dy / dist) * repulsionForce;
         }
         
-        // 相关性引力/斥力
-        // 相关性高 (>0.5) = 吸引，相关性低 (<0.3) = 排斥，中间 = 中性
-        if (relation > 0.5 && dist > minDist) {
-          // 高相关性吸引
-          const attractionForce = this.attractionBase * relation * (dist - minDist) * 0.5;
+        // 相关性引力/斥力 - 更温和的力
+        // 相关性高 (>0.6) = 吸引，相关性低 (<0.4) = 排斥
+        if (relation > 0.6 && dist > minDist && dist < 300) {
+          // 高相关性吸引 - 距离越近吸引力越小
+          const attractionForce = this.attractionBase * relation * (300 - dist) * 0.3;
           fx += (dx / dist) * attractionForce;
           fy += (dy / dist) * attractionForce;
-        } else if (relation < 0.3 && dist < 200) {
-          // 低相关性排斥（让不相关的任务分散开）
-          const repulsionForce = this.repulsionBase * 0.3 * (200 - dist) / 200;
+        } else if (relation < 0.4 && dist < 150) {
+          // 低相关性排斥 - 更温和
+          const repulsionForce = this.repulsionBase * 0.2 * (150 - dist) / 150;
           fx -= (dx / dist) * repulsionForce;
           fy -= (dy / dist) * repulsionForce;
         }
