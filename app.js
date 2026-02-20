@@ -770,8 +770,8 @@ ${tasksText}
         const dist = Math.sqrt(odx * odx + ody * ody);
         if (!isFinite(dist) || dist === 0) continue;
         
-        // 允许轻微重叠：只有当重叠超过半径的30%时才排斥
-        const minDist = (todo.radius + other.radius) * 0.7;
+        // 允许5%重叠：只有当重叠超过半径的5%时才排斥
+        const minDist = (todo.radius + other.radius) * 0.95;
         if (dist < minDist) {
           const overlap = minDist - dist;
           const repulsion = overlap * 0.4; // 温和排斥
