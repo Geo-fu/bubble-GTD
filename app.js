@@ -394,22 +394,57 @@ class BubbleTodo {
       
       const bg = todo.color;
       
+      // 主渐变 - 模拟球体光照
       const gradient = this.ctx.createRadialGradient(
-        todo.x - r * 0.5, todo.y - r * 0.5, 0,
+        todo.x - r * 0.3, todo.y - r * 0.3, r * 0.1,
         todo.x, todo.y, r
       );
-      gradient.addColorStop(0, `rgba(${Math.min(bg.r + 40, 255)}, ${Math.min(bg.g + 40, 255)}, ${Math.min(bg.b + 40, 255)}, ${todo.opacity})`);
-      gradient.addColorStop(0.5, `rgba(${bg.r}, ${bg.g}, ${bg.b}, ${todo.opacity})`);
-      gradient.addColorStop(1, `rgba(${Math.max(bg.r - 20, 0)}, ${Math.max(bg.g - 20, 0)}, ${Math.max(bg.b - 20, 0)}, ${todo.opacity})`);
+      // 高光区域（左上角）
+      gradient.addColorStop(0, `rgba(${Math.min(bg.r + 60, 255)}, ${Math.min(bg.g + 60, 255)}, ${Math.min(bg.b + 60, 255)}, ${todo.opacity})`);
+      // 中间过渡
+      gradient.addColorStop(0.3, `rgba(${Math.min(bg.r + 20, 255)}, ${Math.min(bg.g + 20, 255)}, ${Math.min(bg.b + 20, 255)}, ${todo.opacity})`);
+      // 主体颜色
+      gradient.addColorStop(0.6, `rgba(${bg.r}, ${bg.g}, ${bg.b}, ${todo.opacity})`);
+      // 阴影区域（右下角）
+      gradient.addColorStop(1, `rgba(${Math.max(bg.r - 40, 0)}, ${Math.max(bg.g - 40, 0)}, ${Math.max(bg.b - 40, 0)}, ${todo.opacity})`);
+      
       this.ctx.fillStyle = gradient;
       this.ctx.beginPath();
       this.ctx.arc(todo.x, todo.y, r, 0, Math.PI * 2);
       this.ctx.fill();
       
-      // 光斑效果 - 移到左上角，避免和文字重叠
-      this.ctx.fillStyle = `rgba(255, 255, 255, ${0.2 * todo.opacity})`;
+      // 主高光 - 柔和的大光斑
+      const highlightGrad = this.ctx.createRadialGradient(
+        todo.x - r * 0.4, todo.y - r * 0.4, 0,
+        todo.x - r * 0.4, todo.y - r * 0.4, r * 0.25
+      );
+      highlightGrad.addColorStop(0, `rgba(255, 255, 255, ${0.5 * todo.opacity})`);
+      highlightGrad.addColorStop(0.5, `rgba(255, 255, 255, ${0.15 * todo.opacity})`);
+      highlightGrad.addColorStop(1, `rgba(255, 255, 255, 0)`);
+      
+      this.ctx.fillStyle = highlightGrad;
       this.ctx.beginPath();
-      this.ctx.arc(todo.x - r * 0.5, todo.y - r * 0.5, r * 0.15, 0, Math.PI * 2);
+      this.ctx.arc(todo.x - r * 0.4, todo.y - r * 0.4, r * 0.25, 0, Math.PI * 2);
+      this.ctx.fill();
+      
+      // 小高光点 - 增加真实感
+      this.ctx.fillStyle = `rgba(255, 255, 255, ${0.7 * todo.opacity})`;
+      this.ctx.beginPath();
+      this.ctx.arc(todo.x - r * 0.35, todo.y - r * 0.35, r * 0.06, 0, Math.PI * 2);
+      this.ctx.fill();
+      
+      // 边缘反光 - 模拟环境光
+      const rimGrad = this.ctx.createRadialGradient(
+        todo.x + r * 0.2, todo.y + r * 0.2, r * 0.5,
+        todo.x, todo.y, r
+      );
+      rimGrad.addColorStop(0, `rgba(255, 255, 255, 0)`);
+      rimGrad.addColorStop(0.8, `rgba(255, 255, 255, 0)`);
+      rimGrad.addColorStop(1, `rgba(255, 255, 255, ${0.1 * todo.opacity})`);
+      
+      this.ctx.fillStyle = rimGrad;
+      this.ctx.beginPath();
+      this.ctx.arc(todo.x, todo.y, r, 0, Math.PI * 2);
       this.ctx.fill();
       
       const textColor = todo.textColor || '#fff';
