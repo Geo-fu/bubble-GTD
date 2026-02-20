@@ -259,10 +259,83 @@ class BubbleTodo {
   }
   
   /**
+   * Gemini API 语义分析
+   * 使用 Google Gemini 进行真正的语义理解
+   */
+  async geminiAnalyze(text) {
+    const API_KEY = 'AIzaSyCsdgcHag_08oDCn6pGZU9Sq4tiz762IUU'; // 使用 Firebase API Key 或单独申请
+    
+    try {
+      const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${API_KEY}`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            contents: [{
+              parts: [{
+                text: `分析这个任务的重要性，基于复利思维（时间价值、边际收益、网络效应、杠杆效应）。
+
+任务："${text}"
+
+请以JSON格式返回：
+{
+  "score": 0.0-1.0,
+  "reason": "简短说明，如：💰 高价值投资决策",
+  "category": "金融/商业/学习/紧急/日常"
+}
+
+只返回JSON，不要其他文字。`
+              }]
+            }],
+            generationConfig: {
+              temperature: 0.3,
+              maxOutputTokens: 150
+            }
+          })
+        }
+      );
+      
+      if (!response.ok) {
+        throw new Error(`API error: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      const content = data.candidates[0].content.parts[0].text;
+      
+      // 解析 JSON
+      const jsonMatch = content.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        const result = JSON.parse(jsonMatch[0]);
+        return {
+          score: Math.min(Math.max(result.score, 0.1), 1.0),
+          reason: result.reason || result.category || 'AI分析',
+          needsAI: false // 已经是AI分析的结果
+        };
+      }
+    } catch (e) {
+      console.error('[BubbleGTD] Gemini API failed:', e.message);
+    }
+    
+    // 失败时回退到本地分析
+    return this.semanticAnalyze(text);
+  }
+  
+  /**
    * 本地快速评估（使用语义分析）
    */
   localAnalyze(text) {
     return this.semanticAnalyze(text);
+  }
+  
+  /**
+   * 异步 AI 分析（用于深度分析）
+   */
+  async analyzeWithAI(text) {
+    // 优先使用 Gemini
+    return await this.geminiAnalyze(text);
   }
   
   getColorByImportance(importance) {
@@ -282,13 +355,13 @@ class BubbleTodo {
     const text = input.value.trim();
     if (!text) return;
     
-    // 本地分析
-    const analysis = this.localAnalyze(text);
+    // 先使用本地分析快速显示
+    const quickAnalysis = this.localAnalyze(text);
     const id = Date.now().toString();
     
     // 立即本地显示（0.1秒内）
-    const colorConfig = this.getColorByImportance(analysis.score);
-    const radius = 20 + Math.pow(analysis.score, 2) * 100;
+    const colorConfig = this.getColorByImportance(quickAnalysis.score);
+    const radius = 20 + Math.pow(quickAnalysis.score, 2) * 100;
     
     // 标记为本地添加，避免 onSnapshot 重复处理
     this.localIds.add(id);
@@ -296,9 +369,9 @@ class BubbleTodo {
     this.todos.push({
       id: id,
       text: text,
-      importance: analysis.score,
-      targetImportance: analysis.score,
-      reason: analysis.reason,
+      importance: quickAnalysis.score,
+      targetImportance: quickAnalysis.score,
+      reason: quickAnalysis.reason + ' (分析中...)',
       radius: radius,
       targetRadius: radius,
       x: this.centerX + (Math.random() - 0.5) * 200,
@@ -307,36 +380,51 @@ class BubbleTodo {
       color: colorConfig.bg,
       textColor: colorConfig.text,
       done: false, opacity: 1, scale: 1,
-      isAnalyzing: false
+      isAnalyzing: true
     });
     
     input.value = '';
     
-    // 后台同步到 Firebase（不阻塞）
-    console.log('[BubbleGTD] Saving to Firebase:', id, text);
-    const todoRef = doc(db, 'todos', id);
-    setDoc(todoRef, {
+    // 后台使用 Gemini API 深度分析
+    console.log('[BubbleGTD] Starting Gemini analysis...');
+    this.analyzeWithAI(text).then(aiAnalysis => {
+      console.log('[BubbleGTD] Gemini analysis result:', aiAnalysis);
+      
+      // 更新本地气泡
+      const todo = this.todos.find(t => t.id === id);
+      if (todo) {
+        todo.importance = aiAnalysis.score;
+        todo.targetImportance = aiAnalysis.score;
+        todo.reason = aiAnalysis.reason;
+        todo.targetRadius = 20 + Math.pow(aiAnalysis.score, 2) * 100;
+        const newColorConfig = this.getColorByImportance(aiAnalysis.score);
+        todo.color = newColorConfig.bg;
+        todo.textColor = newColorConfig.text;
+        todo.isAnalyzing = false;
+      }
+      
+      // 更新 Firebase
+      setDoc(doc(db, 'todos', id), {
+        text: text,
+        importance: aiAnalysis.score,
+        reason: aiAnalysis.reason,
+        needsAI: false,
+        aiAnalyzed: true,
+        createdAt: serverTimestamp()
+      }).catch(e => console.error('[BubbleGTD] Update failed:', e));
+    }).catch(e => {
+      console.error('[BubbleGTD] Gemini analysis failed:', e);
+    });
+    
+    // 先保存初始数据到 Firebase
+    setDoc(doc(db, 'todos', id), {
       text: text,
-      importance: analysis.score,
-      reason: analysis.reason,
-      needsAI: analysis.needsAI,
+      importance: quickAnalysis.score,
+      reason: quickAnalysis.reason,
+      needsAI: true,
       aiAnalyzed: false,
       createdAt: serverTimestamp()
-    }).then(() => {
-      console.log('[BubbleGTD] Saved successfully:', id);
-    }).catch(e => {
-      console.error('[BubbleGTD] Save failed:', e.code, e.message);
-      // 显示错误给用户
-      const hint = document.querySelector('.hint');
-      if (hint) {
-        hint.textContent = '保存失败: ' + e.message;
-        hint.style.color = '#ff6b6b';
-        setTimeout(() => {
-          hint.textContent = '点击输入待办 · 长按气泡完成';
-          hint.style.color = 'rgba(255, 255, 255, 0.6)';
-        }, 3000);
-      }
-    });
+    }).catch(e => console.error('[BubbleGTD] Save failed:', e));
   }
   
   triggerExplosion(todo) {
