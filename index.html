@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>气泡待办</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+      height: 100vh;
+      overflow: hidden;
+      touch-action: none;
+    }
+    
+    #canvas {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+    }
+    
+    .input-container {
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 90%;
+      max-width: 400px;
+      z-index: 100;
+    }
+    
+    .input-wrapper {
+      display: flex;
+      align-items: center;
+      background: rgba(255, 255, 255, 0.1);
+      backdrop-filter: blur(10px);
+      border-radius: 30px;
+      padding: 5px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+    }
+    
+    #todoInput {
+      flex: 1;
+      background: transparent;
+      border: none;
+      padding: 15px 20px;
+      color: white;
+      font-size: 16px;
+      outline: none;
+    }
+    
+    #todoInput::placeholder { color: rgba(255, 255, 255, 0.5); }
+    
+    #addBtn {
+      width: 50px; height: 50px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      border: none;
+      color: white;
+      font-size: 24px;
+      cursor: pointer;
+      transition: transform 0.2s;
+    }
+    
+    #addBtn:active { transform: scale(0.95); }
+    
+    .hint {
+      position: fixed;
+      top: 20px; left: 50%;
+      transform: translateX(-50%);
+      color: rgba(255, 255, 255, 0.6);
+      font-size: 14px;
+      text-align: center;
+      z-index: 100;
+    }
+  </style>
+</head>
+<body>
+  <div class="hint">点击输入待办 · 长按气泡完成</div>
+  <canvas id="canvas"></canvas>
+  
+  <div class="input-container">
+    <div class="input-wrapper">
+      <input type="text" id="todoInput" placeholder="输入待办事项..." />
+      <button id="addBtn">+</button>
+    </div>
+  </div>
+  
+  <script src="app.js"></script>
+</body>
+</html>
