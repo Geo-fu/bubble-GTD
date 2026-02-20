@@ -211,15 +211,36 @@ class BubbleTodo {
     return false;
   }
   
-  saveTodos() { localStorage.setItem('bubbleTodos', JSON.stringify(this.todos.filter(t => !t.done))); }
-  
+  saveTodos() {
+    // 只保存文本内容，每次加载时重新评估
+    localStorage.setItem('bubbleTodos', JSON.stringify(this.todos.filter(t => !t.done).map(t => t.text)));
+  }
+
   loadTodos() {
     const saved = localStorage.getItem('bubbleTodos');
     if (saved) {
-      this.todos = JSON.parse(saved);
-      this.todos.forEach(todo => {
-        todo.vx = 0; todo.vy = 0; todo.done = false; todo.opacity = 1; todo.scale = 1;
-        todo.targetRadius = todo.radius; todo.targetImportance = todo.importance; todo.isAnalyzing = false;
+      const texts = JSON.parse(saved);
+      // 重新评估每个待办的重要度
+      texts.forEach(text => {
+        if (typeof text === 'string') {
+          const analysis = this.deepAnalyze(text);
+          const radius = 20 + Math.pow(analysis.score, 2) * 100;
+          this.todos.push({
+            id: Date.now() + Math.random(),
+            text: text,
+            importance: analysis.score,
+            targetImportance: analysis.score,
+            reason: analysis.reason,
+            radius: radius,
+            targetRadius: radius,
+            x: this.centerX + (Math.random() - 0.5) * 200,
+            y: this.centerY + (Math.random() - 0.5) * 200,
+            vx: 0, vy: 0,
+            color: this.getColorByImportance(analysis.score),
+            done: false, opacity: 1, scale: 1,
+            isAnalyzing: false
+          });
+        }
       });
     }
   }
