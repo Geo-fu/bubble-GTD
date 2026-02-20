@@ -9,7 +9,7 @@ class BubbleTodo {
     this.touch = { x: 0, y: 0, isDown: false, target: null };
     this.longPressTimer = null;
     
-    // API 配置（使用 Kimi API）
+    // API 配置
     this.apiKey = 'YOUR_API_KEY';
     this.useAI = false;
     
@@ -23,9 +23,9 @@ class BubbleTodo {
     this.canvas.addEventListener('touchend', () => this.handleEnd());
     this.canvas.addEventListener('mousedown', (e) => this.handleStart(e.clientX, e.clientY));
     this.canvas.addEventListener('mouseup', () => this.handleEnd());
-    document.getElementById('addBtn').addEventListener('click', async () => await this.addTodo());
-    document.getElementById('todoInput').addEventListener('keypress', async (e) => {
-      if (e.key === 'Enter') await this.addTodo();
+    document.getElementById('addBtn').addEventListener('click', () => this.addTodo());
+    document.getElementById('todoInput').addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') this.addTodo();
     });
     
     this.loadTodos();
@@ -39,166 +39,110 @@ class BubbleTodo {
     this.centerY = this.canvas.height / 2;
   }
   
-  analyzeImportance(text) {
-    const baseScore = this.baseAnalysis(text);
-    const compoundScore = this.compoundAnalysis(text);
-    const finalScore = baseScore * 0.3 + compoundScore * 0.7;
-    
-    return {
-      score: Math.min(Math.max(finalScore, 0.1), 1),
-      reason: this.generateReason(text, compoundScore)
-    };
-  }
-  
-  baseAnalysis(text) {
-    let score = 0.3;
-    const lowerText = text.toLowerCase();
-    
-    const urgencyKeywords = {
-      high: ['紧急', '马上', '立刻', '现在', 'deadline', '截止', '到期', '超时'],
-      medium: ['今天', '明天', '本周', '近期'],
-      low: ['下周', '以后', '有空', '随缘']
-    };
-    
-    urgencyKeywords.high.forEach(word => { if (lowerText.includes(word)) score += 0.25; });
-    urgencyKeywords.medium.forEach(word => { if (lowerText.includes(word)) score += 0.1; });
-    urgencyKeywords.low.forEach(word => { if (lowerText.includes(word)) score -= 0.1; });
-    
-    const peopleKeywords = ['老板', '客户', '领导', 'ceo', '总裁', '董事长'];
-    peopleKeywords.forEach(word => { if (lowerText.includes(word)) score += 0.15; });
-    
-    if (/\d{1,2}[:\：]\d{2}/.test(text)) score += 0.1;
-    if (/\d{4}[年\/\-]\d{1,2}[月\/\-]\d{1,2}/.test(text)) score += 0.1;
-    
-    return Math.min(Math.max(score, 0.1), 1);
-  }
-  
-  compoundAnalysis(text) {
+  /**
+   * 快速评估 - 立即显示
+   */
+  quickAnalyze(text) {
     let score = 0.5;
     const lowerText = text.toLowerCase();
     
-    const timeCompoundKeywords = [
-      '学习', '读书', '技能', '提升', '成长', '积累', '沉淀',
-      '习惯', '锻炼', '健康', '理财', '投资', '知识', '能力'
-    ];
-    timeCompoundKeywords.forEach(word => {
-      if (lowerText.includes(word)) score += 0.15;
-    });
+    // 紧急关键词
+    const urgentWords = ['紧急', '马上', '立刻', '现在', 'deadline', '截止'];
+    urgentWords.forEach(w => { if (lowerText.includes(w)) score += 0.2; });
     
-    const marginalGainKeywords = [
-      '产品', '系统', '流程', '自动化', '工具', '平台',
-      '品牌', '口碑', '影响力', '网络', '生态', '标准'
-    ];
-    marginalGainKeywords.forEach(word => {
-      if (lowerText.includes(word)) score += 0.12;
-    });
+    // 重要人物
+    const importantPeople = ['老板', '客户', '领导', 'ceo', '总裁'];
+    importantPeople.forEach(w => { if (lowerText.includes(w)) score += 0.15; });
     
-    const networkEffectKeywords = [
-      '团队', '合作', '协作', '分享', '交流', '会议', '沟通',
-      '招聘', '培训', '传承', '文档', '知识库', '方法论'
-    ];
-    networkEffectKeywords.forEach(word => {
-      if (lowerText.includes(word)) score += 0.1;
-    });
+    // 复利关键词
+    const compoundWords = ['学习', '读书', '技能', '产品', '系统', '战略', '团队'];
+    compoundWords.forEach(w => { if (lowerText.includes(w)) score += 0.1; });
     
-    const leverageKeywords = [
-      '战略', '决策', '方向', '规划', '布局', '资源',
-      '融资', '并购', '上市', 'ipo', '扩张', '规模化'
-    ];
-    leverageKeywords.forEach(word => {
-      if (lowerText.includes(word)) score += 0.18;
-    });
+    return {
+      score: Math.min(Math.max(score, 0.3), 0.9),
+      reason: '快速评估中...',
+      isQuick: true
+    };
+  }
+  
+  /**
+   * 深度评估 - 异步重新计算
+   */
+  deepAnalyze(text) {
+    let score = 0.5;
+    const lowerText = text.toLowerCase();
+    const reasons = [];
     
-    const negativeCompoundKeywords = [
-      '琐事', '重复', '机械', '无意义', '浪费时间', '内耗',
-      '扯皮', '推诿', '拖延', '逃避', '应付', '交差'
-    ];
-    negativeCompoundKeywords.forEach(word => {
-      if (lowerText.includes(word)) score -= 0.2;
-    });
-    
-    if (/会议|开会|讨论|评审/.test(text)) {
-      if (!/决策|确定|批准|通过/.test(text)) {
-        score -= 0.1;
-      }
+    // 1. 时间复利
+    const timeWords = ['学习', '读书', '技能', '提升', '成长', '习惯', '健康', '理财'];
+    let timeScore = 0;
+    timeWords.forEach(w => { if (lowerText.includes(w)) timeScore += 0.15; });
+    if (timeScore > 0) {
+      score += Math.min(timeScore, 0.3);
+      reasons.push('💡 时间复利');
     }
     
-    if (/回复|答复|确认|知悉/.test(text)) {
-      score -= 0.15;
+    // 2. 边际收益
+    const marginWords = ['产品', '系统', '流程', '自动化', '品牌', '平台'];
+    let marginScore = 0;
+    marginWords.forEach(w => { if (lowerText.includes(w)) marginScore += 0.12; });
+    if (marginScore > 0) {
+      score += Math.min(marginScore, 0.25);
+      reasons.push('🛠️ 边际收益递增');
+    }
+    
+    // 3. 网络效应
+    const networkWords = ['团队', '合作', '培训', '分享', '传承', '文档'];
+    let networkScore = 0;
+    networkWords.forEach(w => { if (lowerText.includes(w)) networkScore += 0.1; });
+    if (networkScore > 0) {
+      score += Math.min(networkScore, 0.2);
+      reasons.push('👥 网络效应');
+    }
+    
+    // 4. 杠杆效应
+    const leverageWords = ['战略', '决策', '规划', '融资', '并购', '上市'];
+    let leverageScore = 0;
+    leverageWords.forEach(w => { if (lowerText.includes(w)) leverageScore += 0.18; });
+    if (leverageScore > 0) {
+      score += Math.min(leverageScore, 0.35);
+      reasons.push('🎯 杠杆效应');
+    }
+    
+    // 5. 紧急程度
+    const urgentWords = ['紧急', '马上', '立刻', 'deadline', '截止'];
+    let urgentScore = 0;
+    urgentWords.forEach(w => { if (lowerText.includes(w)) urgentScore += 0.15; });
+    if (urgentScore > 0) {
+      score += Math.min(urgentScore, 0.3);
+      reasons.push('⏰ 紧急');
+    }
+    
+    // 6. 负面复利（减分）
+    const negativeWords = ['琐事', '重复', '机械', '无意义', '内耗', '扯皮'];
+    negativeWords.forEach(w => { if (lowerText.includes(w)) score -= 0.2; });
+    
+    // 7. 任务类型判断
+    if (/会议|开会|讨论/.test(text) && !/决策|确定/.test(text)) {
+      score -= 0.1;
+      reasons.push('⚠️ 低产出会议');
+    }
+    
+    if (/回复|确认|知悉/.test(text)) {
+      score -= 0.1;
     }
     
     if (/思考|规划|设计|架构/.test(text)) {
-      score += 0.15;
+      score += 0.1;
     }
     
-    return Math.min(Math.max(score, 0.1), 1);
-  }
-  
-  generateReason(text, compoundScore) {
-    const reasons = [];
-    const lowerText = text.toLowerCase();
+    const finalScore = Math.min(Math.max(score, 0.1), 1);
     
-    if (compoundScore > 0.8) {
-      reasons.push('🔥 高复利价值');
-    } else if (compoundScore > 0.6) {
-      reasons.push('📈 有累积效应');
-    } else if (compoundScore < 0.4) {
-      reasons.push('⚠️ 低复利价值');
-    }
-    
-    if (/学习|读书|技能/.test(lowerText)) reasons.push('💡 能力提升');
-    if (/产品|系统|流程/.test(lowerText)) reasons.push('🛠️ 系统建设');
-    if (/团队|合作|培训/.test(lowerText)) reasons.push('👥 组织发展');
-    if (/战略|决策|规划/.test(lowerText)) reasons.push('🎯 战略级');
-    if (/紧急|马上|立刻/.test(lowerText)) reasons.push('⏰ 紧急');
-    
-    return reasons.join(' | ') || '一般任务';
-  }
-  
-  async analyzeWithAI(text) {
-    if (!this.useAI || !this.apiKey) {
-      return null;
-    }
-    
-    try {
-      const response = await fetch('https://api.moonshot.cn/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${this.apiKey}`
-        },
-        body: JSON.stringify({
-          model: 'kimi-k2.5',
-          messages: [{
-            role: 'system',
-            content: `你是一个基于复利思维的任务重要性分析专家。请分析以下任务的重要性（0-1分），并说明原因。
-
-复利思维评估维度：
-1. 时间复利：今天做的事对未来有多大累积效应
-2. 边际收益：每多做一次，收益是否递增
-3. 网络效应：是否产生连接，价值随规模增长
-4. 杠杆效应：一份努力能否产生多份回报
-
-请以JSON格式返回：{"score": 0.85, "reason": "原因说明"}`
-          }, {
-            role: 'user',
-            content: `任务：${text}`
-          }],
-          temperature: 0.3
-        })
-      });
-      
-      const data = await response.json();
-      const content = data.choices[0].message.content;
-      
-      const match = content.match(/\{[^}]+\}/);
-      if (match) {
-        return JSON.parse(match[0]);
-      }
-    } catch (e) {
-      console.log('AI analysis failed:', e);
-    }
-    return null;
+    return {
+      score: finalScore,
+      reason: reasons.length > 0 ? reasons.join(' | ') : '一般任务',
+      isQuick: false
+    };
   }
   
   getColorByImportance(importance) {
@@ -209,46 +153,59 @@ class BubbleTodo {
     return { r: 150, g: 150, b: 180 };
   }
   
-  async addTodo() {
+  addTodo() {
     const input = document.getElementById('todoInput');
     const text = input.value.trim();
     if (!text) return;
     
-    const btn = document.getElementById('addBtn');
-    btn.textContent = '...';
-    btn.disabled = true;
-    
-    let analysis = this.analyzeImportance(text);
-    
-    if (this.useAI) {
-      const aiResult = await this.analyzeWithAI(text);
-      if (aiResult) {
-        analysis.score = aiResult.score * 0.6 + analysis.score * 0.4;
-        analysis.reason = aiResult.reason;
-      }
-    }
-    
-    const radius = 25 + analysis.score * 55;
+    // 1. 快速评估 - 立即显示
+    const quickAnalysis = this.quickAnalyze(text);
+    const radius = 25 + quickAnalysis.score * 55;
     
     const todo = {
       id: Date.now(),
       text: text,
-      importance: analysis.score,
-      reason: analysis.reason,
+      importance: quickAnalysis.score,
+      targetImportance: quickAnalysis.score, // 目标重要性（用于动画过渡）
+      reason: quickAnalysis.reason,
       radius: radius,
+      targetRadius: radius,
       x: this.centerX + (Math.random() - 0.5) * 100,
       y: this.centerY + (Math.random() - 0.5) * 100,
       vx: 0, vy: 0,
-      color: this.getColorByImportance(analysis.score),
-      done: false, opacity: 1, scale: 1
+      color: this.getColorByImportance(quickAnalysis.score),
+      done: false, opacity: 1, scale: 1,
+      isAnalyzing: true
     };
     
     this.todos.push(todo);
     this.saveTodos();
-    
     input.value = '';
-    btn.textContent = '+';
-    btn.disabled = false;
+    
+    // 2. 异步深度评估 - 500ms 后重新计算
+    setTimeout(() => {
+      const deepAnalysis = this.deepAnalyze(text);
+      
+      // 更新目标值（通过动画过渡到新大小）
+      todo.targetImportance = deepAnalysis.score;
+      todo.targetRadius = 25 + deepAnalysis.score * 55;
+      todo.reason = deepAnalysis.reason;
+      todo.color = this.getColorByImportance(deepAnalysis.score);
+      todo.isAnalyzing = false;
+      
+      this.saveTodos();
+    }, 500);
+  }
+  
+  // 动画过渡到新大小
+  updateTodoSize(todo) {
+    if (Math.abs(todo.radius - todo.targetRadius) > 0.5) {
+      todo.radius += (todo.targetRadius - todo.radius) * 0.1;
+      return true; // 还在动画中
+    }
+    todo.radius = todo.targetRadius;
+    todo.importance = todo.targetImportance;
+    return false;
   }
   
   saveTodos() {
@@ -262,6 +219,9 @@ class BubbleTodo {
       this.todos.forEach(todo => {
         todo.vx = 0; todo.vy = 0;
         todo.done = false; todo.opacity = 1; todo.scale = 1;
+        todo.targetRadius = todo.radius;
+        todo.targetImportance = todo.importance;
+        todo.isAnalyzing = false;
       });
     }
   }
@@ -313,6 +273,13 @@ class BubbleTodo {
   }
   
   updatePhysics() {
+    // 更新气泡大小动画
+    this.todos.forEach(todo => {
+      if (!todo.done) {
+        this.updateTodoSize(todo);
+      }
+    });
+    
     for (const todo of this.todos) {
       if (todo.done) continue;
       todo.vx += (this.centerX - todo.x) * this.centerAttraction;
@@ -360,6 +327,16 @@ class BubbleTodo {
       this.ctx.beginPath();
       this.ctx.arc(todo.x, todo.y, r, 0, Math.PI * 2);
       this.ctx.fill();
+      
+      // 分析中动画效果
+      if (todo.isAnalyzing) {
+        this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+        this.ctx.lineWidth = 2;
+        this.ctx.beginPath();
+        this.ctx.arc(todo.x, todo.y, r + 5, 0, Math.PI * 2);
+        this.ctx.stroke();
+      }
+      
       this.ctx.fillStyle = `rgba(255, 255, 255, ${0.3 * todo.opacity})`;
       this.ctx.beginPath();
       this.ctx.arc(todo.x - r * 0.3, todo.y - r * 0.3, r * 0.2, 0, Math.PI * 2);
