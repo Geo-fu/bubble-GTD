@@ -21,7 +21,7 @@ class BubbleTodo {
     this.ctx = this.canvas.getContext('2d');
     this.todos = [];
     this.particles = [];
-    this.friction = 0.75;  // 增加阻尼，3秒内稳定
+    this.friction = 0.82;  // 平衡阻尼，快速稳定不振荡
     this.centerAttraction = 0.0003;
     this.touch = { x: 0, y: 0, isDown: false, target: null };
     this.longPressTimer = null;
@@ -699,11 +699,11 @@ ${tasksText}
       
       let fx = 0, fy = 0;
       
-      // 1. 向屏幕中心聚集 - 增强力度快速归位
+      // 1. 向屏幕中心聚集 - 适中力度
       const dx = this.centerX - todo.x;
       const dy = this.centerY - todo.y;
-      fx += dx * 0.02;
-      fy += dy * 0.02;
+      fx += dx * 0.008;
+      fy += dy * 0.008;
       
       // 2. 气泡之间简单排斥（防止重叠）
       for (let j = 0; j < this.todos.length; j++) {
@@ -719,8 +719,8 @@ ${tasksText}
         const minDist = todo.radius + other.radius;
         if (dist < minDist) {
           const overlap = minDist - dist;
-          fx -= (odx / dist) * overlap * 2;  // 增强排斥，更快分离
-          fy -= (ody / dist) * overlap * 2;
+          fx -= (odx / dist) * overlap * 1.2;  // 适中排斥
+          fy -= (ody / dist) * overlap * 1.2;
         }
       }
       
