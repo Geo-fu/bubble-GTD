@@ -492,14 +492,14 @@ ${tasksText}
     
     // 返回偏移量（将屏幕分为三个区域）
     if (companyScore >= personalScore && companyScore >= familyScore) {
-      // 公司事务：左上
-      return { x: -this.canvas.width * 0.25, y: -this.canvas.height * 0.2 };
+      // 公司事务：左上方
+      return { x: -this.canvas.width * 0.3, y: -this.canvas.height * 0.25 };
     } else if (personalScore >= familyScore) {
-      // 个人成长：右上
-      return { x: this.canvas.width * 0.25, y: -this.canvas.height * 0.2 };
+      // 个人成长：右上方
+      return { x: this.canvas.width * 0.3, y: -this.canvas.height * 0.25 };
     } else {
-      // 家庭责任：下方
-      return { x: 0, y: this.canvas.height * 0.25 };
+      // 家庭责任：正下方
+      return { x: 0, y: this.canvas.height * 0.3 };
     }
   }
 
@@ -699,14 +699,15 @@ ${tasksText}
       
       let fx = 0, fy = 0;
       
-      // 根据任务类别施加不同的中心偏移力
+      // 根据任务类别施加不同的中心偏移力 - 增强聚集效果
       const categoryOffset = this.getCategoryOffset(todo);
       const targetX = this.centerX + categoryOffset.x;
       const targetY = this.centerY + categoryOffset.y;
       
-      const centerForce = this.centerAttraction * (0.2 + todo.importance * 0.5);
-      fx += (targetX - todo.x) * centerForce;
-      fy += (targetY - todo.y) * centerForce;
+      // 大幅增强类别中心吸引力，让同类更聚集
+      const categoryForce = 0.002 + this.centerAttraction * (0.2 + todo.importance * 0.5);
+      fx += (targetX - todo.x) * categoryForce;
+      fy += (targetY - todo.y) * categoryForce;
       
       for (let j = 0; j < this.todos.length; j++) {
         if (i === j) continue;
@@ -751,9 +752,9 @@ ${tasksText}
             fx += (dx / dist) * attractionForce;
             fy += (dy / dist) * attractionForce;
           }
-        } else if (relation < 0.3 && dist < 300) {
-          // 不同类别强排斥，保持距离
-          const repulsionForce = this.repulsionBase * 0.4 * (300 - dist) / 300;
+        } else if (relation < 0.3 && dist < 400) {
+          // 不同类别强排斥，保持更大距离
+          const repulsionForce = this.repulsionBase * 0.8 * (400 - dist) / 400;
           fx -= (dx / dist) * repulsionForce;
           fy -= (dy / dist) * repulsionForce;
         }
