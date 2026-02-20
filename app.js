@@ -738,14 +738,17 @@ ${tasksText}
       
       let fx = 0, fy = 0;
       
-      // 1. 所有气泡都向中心 gentle 靠拢（能量衰减后力度减小）
+      // 1. 所有气泡都向中心 gentle 靠拢（能量衰减后力度减小，半径越大引力越强）
       const dx = this.centerX - todo.x;
       const dy = this.centerY - todo.y;
       const distToCenter = Math.sqrt(dx * dx + dy * dy);
       if (distToCenter > 0) {
-        const strength = (todo === maxTodo) ? 0.005 : 0.002;
+        // 基础力度 + 半径加成（质量越大引力越强）
+        const baseStrength = (todo === maxTodo) ? 0.003 : 0.001;
+        const massFactor = todo.radius / 50; // 半径越大，质量越大，引力越强
+        const strength = baseStrength * massFactor;
         // 能量越低，引力越小（模拟能量衰减）
-        const attraction = Math.min(distToCenter * strength * todo.energy, 3);
+        const attraction = Math.min(distToCenter * strength * todo.energy, 5);
         fx += (dx / distToCenter) * attraction;
         fy += (dy / distToCenter) * attraction;
       }
