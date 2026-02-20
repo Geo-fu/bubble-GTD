@@ -214,10 +214,6 @@ class BubbleTodo {
     const text = input.value.trim();
     if (!text) return;
     
-    const btn = document.getElementById('addBtn');
-    btn.textContent = '...';
-    btn.disabled = true;
-    
     // 本地分析
     const analysis = this.localAnalyze(text);
     const id = Date.now().toString();
@@ -242,23 +238,17 @@ class BubbleTodo {
       isAnalyzing: false
     });
     
-    // 后台同步到 Firebase
-    try {
-      await setDoc(doc(db, 'todos', id), {
-        text: text,
-        importance: analysis.score,
-        reason: analysis.reason,
-        needsAI: analysis.needsAI,
-        aiAnalyzed: false,
-        createdAt: serverTimestamp()
-      });
-    } catch (e) {
-      console.error('Save failed:', e);
-    }
-    
     input.value = '';
-    btn.textContent = '+';
-    btn.disabled = false;
+    
+    // 后台同步到 Firebase（不阻塞）
+    setDoc(doc(db, 'todos', id), {
+      text: text,
+      importance: analysis.score,
+      reason: analysis.reason,
+      needsAI: analysis.needsAI,
+      aiAnalyzed: false,
+      createdAt: serverTimestamp()
+    }).catch(e => console.error('Save failed:', e));
   }
   
   triggerExplosion(todo) {
