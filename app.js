@@ -1,3 +1,6 @@
+// Bubble GTD - 力学模型稳定版
+// 物理特性：中心引力∝体积 + 排斥防重叠 + 固定阻尼0.9
+
 // Firebase 配置
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-app.js";
 import { getFirestore, collection, doc, setDoc, deleteDoc, onSnapshot, query, serverTimestamp } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-firestore.js";
