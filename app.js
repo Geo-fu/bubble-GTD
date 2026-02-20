@@ -324,7 +324,13 @@ class BubbleTodo {
    * 一次性分析所有任务，减少 API 调用
    */
   async geminiAnalyzeAll(todos) {
-    const API_KEY = 'AIzaSyDsIFkGLqONEXS3SCOG8rmggAMYkMPcg6c';
+    // 从环境变量或配置中读取 API Key
+    const API_KEY = window.GEMINI_API_KEY || '';
+    
+    if (!API_KEY) {
+      console.warn('[BubbleGTD] Gemini API Key not configured');
+      return null;
+    }
     
     // 构建任务列表文本
     const tasksText = todos.map((t, i) => `${i + 1}. ${t.text}`).join('\n');
