@@ -137,15 +137,16 @@ class BubbleTodo {
   }
   
   getColorByImportance(importance) {
-    if (importance > 0.9) return { r: 255, g: 50, b: 50 };
-    if (importance > 0.8) return { r: 255, g: 80, b: 60 };
-    if (importance > 0.7) return { r: 255, g: 120, b: 70 };
-    if (importance > 0.6) return { r: 255, g: 160, b: 80 };
-    if (importance > 0.5) return { r: 255, g: 200, b: 100 };
-    if (importance > 0.4) return { r: 255, g: 230, b: 150 };
-    if (importance > 0.3) return { r: 150, g: 220, b: 255 };
-    if (importance > 0.2) return { r: 120, g: 180, b: 220 };
-    return { r: 140, g: 140, b: 160 };
+    // 返回背景色和文字色
+    if (importance > 0.9) return { bg: { r: 220, g: 53, b: 69 }, text: '#fff' };    // 深红
+    if (importance > 0.8) return { bg: { r: 253, g: 126, b: 20 }, text: '#fff' };   // 橙色
+    if (importance > 0.7) return { bg: { r: 255, g: 193, b: 7 }, text: '#212529' }; // 黄色
+    if (importance > 0.6) return { bg: { r: 40, g: 167, b: 69 }, text: '#fff' };    // 绿色
+    if (importance > 0.5) return { bg: { r: 23, g: 162, b: 184 }, text: '#fff' };   // 青色
+    if (importance > 0.4) return { bg: { r: 0, g: 123, b: 255 }, text: '#fff' };    // 蓝色
+    if (importance > 0.3) return { bg: { r: 111, g: 66, b: 193 }, text: '#fff' };   // 紫色
+    if (importance > 0.2) return { bg: { r: 108, g: 117, b: 125 }, text: '#fff' };  // 灰色
+    return { bg: { r: 73, g: 80, b: 87 }, text: '#fff' };                            // 深灰
   }
   
   async addTodo() {
@@ -178,7 +179,8 @@ class BubbleTodo {
       x: this.centerX + (Math.random() - 0.5) * 200,
       y: this.centerY + (Math.random() - 0.5) * 200,
       vx: 0, vy: 0,
-      color: this.getColorByImportance(analysis.score),
+      color: this.getColorByImportance(analysis.score).bg,
+      textColor: this.getColorByImportance(analysis.score).text,
       done: false, opacity: 1, scale: 1,
       isAnalyzing: false
     };
@@ -216,7 +218,8 @@ class BubbleTodo {
             x: this.centerX + (Math.random() - 0.5) * 200,
             y: this.centerY + (Math.random() - 0.5) * 200,
             vx: 0, vy: 0,
-            color: this.getColorByImportance(analysis.score),
+            color: this.getColorByImportance(analysis.score).bg,
+            textColor: this.getColorByImportance(analysis.score).text,
             done: false, opacity: 1, scale: 1,
             isAnalyzing: false
           });
@@ -339,30 +342,40 @@ class BubbleTodo {
       if (todo.done && todo.opacity <= 0) continue;
       const r = todo.radius * todo.scale;
       
+      // 获取颜色配置
+      const colorConfig = this.getColorByImportance(todo.importance);
+      const bg = colorConfig.bg;
+      
       const gradient = this.ctx.createRadialGradient(
         todo.x - r * 0.3, todo.y - r * 0.3, 0,
         todo.x, todo.y, r
       );
-      gradient.addColorStop(0, `rgba(${todo.color.r + 50}, ${todo.color.g + 50}, ${todo.color.b + 50}, ${todo.opacity})`);
-      gradient.addColorStop(0.5, `rgba(${todo.color.r}, ${todo.color.g}, ${todo.color.b}, ${todo.opacity})`);
-      gradient.addColorStop(1, `rgba(${todo.color.r - 30}, ${todo.color.g - 30}, ${todo.color.b - 30}, ${todo.opacity})`);
+      gradient.addColorStop(0, `rgba(${Math.min(bg.r + 40, 255)}, ${Math.min(bg.g + 40, 255)}, ${Math.min(bg.b + 40, 255)}, ${todo.opacity})`);
+      gradient.addColorStop(0.5, `rgba(${bg.r}, ${bg.g}, ${bg.b}, ${todo.opacity})`);
+      gradient.addColorStop(1, `rgba(${Math.max(bg.r - 20, 0)}, ${Math.max(bg.g - 20, 0)}, ${Math.max(bg.b - 20, 0)}, ${todo.opacity})`);
       this.ctx.fillStyle = gradient;
       this.ctx.beginPath();
       this.ctx.arc(todo.x, todo.y, r, 0, Math.PI * 2);
       this.ctx.fill();
       
-      this.ctx.fillStyle = `rgba(255, 255, 255, ${0.3 * todo.opacity})`;
+      // 高光
+      this.ctx.fillStyle = `rgba(255, 255, 255, ${0.25 * todo.opacity})`;
       this.ctx.beginPath();
       this.ctx.arc(todo.x - r * 0.3, todo.y - r * 0.3, r * 0.2, 0, Math.PI * 2);
       this.ctx.fill();
       
-      this.ctx.fillStyle = `rgba(255, 255, 255, ${todo.opacity})`;
+      // 文字颜色根据背景色自动选择
+      const textColor = todo.textColor || '#fff';
+      this.ctx.fillStyle = textColor === '#fff' 
+        ? `rgba(255, 255, 255, ${todo.opacity})`
+        : `rgba(33, 37, 41, ${todo.opacity})`;
+      
       const fontSize = Math.max(14, Math.min(r * 0.25, 32));
-      this.ctx.font = `${fontSize}px sans-serif`;
+      this.ctx.font = `bold ${fontSize}px sans-serif`;
       this.ctx.textAlign = 'center';
       this.ctx.textBaseline = 'middle';
       
-      const maxWidth = r * 1.6;
+      const maxWidth = r * 1.5;
       const words = todo.text.split('');
       let line = '', lines = [];
       for (const word of words) {
@@ -374,22 +387,26 @@ class BubbleTodo {
       lines.push(line);
       if (lines.length > 3) lines = lines.slice(0, 2).concat(['...']);
       
-      const lineHeight = r * 0.25;
+      const lineHeight = r * 0.28;
       const startY = todo.y - (lines.length - 1) * lineHeight / 2;
       lines.forEach((line, index) => {
         this.ctx.fillText(line, todo.x, startY + index * lineHeight);
       });
       
+      // 原因文字
       if (todo.reason && r > 40) {
-        this.ctx.fillStyle = `rgba(255, 255, 255, ${0.6 * todo.opacity})`;
-        const reasonFontSize = Math.max(10, Math.min(r * 0.12, 16));
+        this.ctx.fillStyle = textColor === '#fff'
+          ? `rgba(255, 255, 255, ${0.7 * todo.opacity})`
+          : `rgba(33, 37, 41, ${0.7 * todo.opacity})`;
+        const reasonFontSize = Math.max(10, Math.min(r * 0.12, 14));
         this.ctx.font = `${reasonFontSize}px sans-serif`;
-        this.ctx.fillText(todo.reason, todo.x, startY + lines.length * lineHeight + 5);
+        this.ctx.fillText(todo.reason, todo.x, startY + lines.length * lineHeight + 8);
       }
     }
     
+    // 粒子效果
     for (const p of this.particles) {
-      this.ctx.fillStyle = `rgba(${p.color.r}, ${p.color.g}, ${p.color.b}, ${p.life})`;
+      this.ctx.fillStyle = `rgba(${p.color.r || p.color.bg?.r || 100}, ${p.color.g || p.color.bg?.g || 100}, ${p.color.b || p.color.bg?.b || 100}, ${p.life})`;
       this.ctx.beginPath();
       this.ctx.arc(p.x, p.y, p.size * p.life, 0, Math.PI * 2);
       this.ctx.fill();
