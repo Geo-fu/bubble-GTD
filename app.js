@@ -716,39 +716,54 @@ ${tasksText}
   handleMove(x, y) {
     if (!this.touch.isDown || !this.touch.target) return;
     
-    const dy = y - this.touch.startY;
-    const threshold = 30; // 滑动阈值，超过此距离才触发
+    const todo = this.touch.target;
+    const dy = y - this.touch.y; // 当前帧与上一帧的Y差值
+    const totalDy = y - this.touch.startY; // 总滑动距离
     
-    // 如果移动超过阈值，取消长按计时
-    if (Math.abs(dy) > 10) {
+    // 标记已移动
+    if (Math.abs(totalDy) > 5) {
       this.touch.hasMoved = true;
       clearTimeout(this.longPressTimer);
     }
     
-    // 检测上下滑动调整重要性
-    if (Math.abs(dy) > threshold) {
-      const todo = this.touch.target;
-      const adjustment = 0.05; // 每次调整0.05
+    // 气泡跟随手指移动
+    todo.y += dy * 0.8; // 0.8系数让气泡有轻微滞后感
+    todo.vy = 0; // 清除垂直速度，避免物理引擎干扰
+    
+    // 根据总滑动距离调整重要度（每50px调整0.05）
+    const adjustmentThreshold = 50;
+    const adjustment = 0.05;
+    
+    if (totalDy < -adjustmentThreshold) {
+      // 向上滑动超过阈值 - 提高重要度
+      const steps = Math.floor(Math.abs(totalDy) / adjustmentThreshold);
+      const newImportance = Math.min(todo.targetImportance + steps * adjustment, 1.0);
       
-      if (dy < -threshold) {
-        // 向上滑动 - 提高重要度
-        todo.targetImportance = Math.min(todo.targetImportance + adjustment, 1.0);
-        this.touch.startY = y; // 重置起始位置，允许连续调整
-      } else if (dy > threshold) {
-        // 向下滑动 - 降低重要度
-        todo.targetImportance = Math.max(todo.targetImportance - adjustment, 0.1);
-        this.touch.startY = y; // 重置起始位置，允许连续调整
+      if (newImportance !== todo.targetImportance) {
+        todo.targetImportance = newImportance;
+        todo.targetRadius = 20 + Math.pow(todo.targetImportance, 2) * 100;
+        const newColor = this.getColorByImportance(todo.targetImportance);
+        todo.color = newColor.bg;
+        todo.textColor = newColor.text;
+        this.updateTodoImportance(todo);
       }
+    } else if (totalDy > adjustmentThreshold) {
+      // 向下滑动超过阈值 - 降低重要度
+      const steps = Math.floor(totalDy / adjustmentThreshold);
+      const newImportance = Math.max(todo.targetImportance - steps * adjustment, 0.1);
       
-      // 更新半径和颜色
-      todo.targetRadius = 20 + Math.pow(todo.targetImportance, 2) * 100;
-      const newColor = this.getColorByImportance(todo.targetImportance);
-      todo.color = newColor.bg;
-      todo.textColor = newColor.text;
-      
-      // 更新到 Firebase
-      this.updateTodoImportance(todo);
+      if (newImportance !== todo.targetImportance) {
+        todo.targetImportance = newImportance;
+        todo.targetRadius = 20 + Math.pow(todo.targetImportance, 2) * 100;
+        const newColor = this.getColorByImportance(todo.targetImportance);
+        todo.color = newColor.bg;
+        todo.textColor = newColor.text;
+        this.updateTodoImportance(todo);
+      }
     }
+    
+    // 更新上一帧位置
+    this.touch.y = y;
   }
   
   async updateTodoImportance(todo) {
