@@ -731,7 +731,7 @@ ${tasksText}
     todo.vy = 0; // 清除垂直速度，避免物理引擎干扰
     
     // 根据总滑动距离调整重要度（每150px调整0.05）
-    const adjustmentThreshold = 50;
+    const adjustmentThreshold = 30;
     const adjustment = 0.02;
     
     if (totalDy < -adjustmentThreshold) {
