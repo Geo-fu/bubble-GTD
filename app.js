@@ -51,8 +51,10 @@ class BubbleTodo {
     this.resize();
     window.addEventListener('resize', () => this.resize());
     this.canvas.addEventListener('touchstart', (e) => this.handleStart(e.touches[0].clientX, e.touches[0].clientY), {passive: false});
+    this.canvas.addEventListener('touchmove', (e) => this.handleMove(e.touches[0].clientX, e.touches[0].clientY), {passive: false});
     this.canvas.addEventListener('touchend', () => this.handleEnd());
     this.canvas.addEventListener('mousedown', (e) => this.handleStart(e.clientX, e.clientY));
+    this.canvas.addEventListener('mousemove', (e) => this.handleMove(e.clientX, e.clientY));
     this.canvas.addEventListener('mouseup', () => this.handleEnd());
     document.getElementById('addBtn').addEventListener('click', () => this.addTodo());
     document.getElementById('todoInput').addEventListener('keypress', (e) => {
@@ -699,7 +701,11 @@ ${tasksText}
   }
   
   handleStart(x, y) {
-    this.touch.x = x; this.touch.y = y; this.touch.isDown = true;
+    this.touch.x = x; 
+    this.touch.y = y; 
+    this.touch.isDown = true;
+    this.touch.startY = y; // 记录起始Y坐标
+    this.touch.hasMoved = false; // 标记是否移动过
     const todo = this.getTodoAt(x, y);
     if (todo) {
       this.touch.target = todo;
@@ -707,7 +713,68 @@ ${tasksText}
     }
   }
   
-  handleEnd() { clearTimeout(this.longPressTimer); this.touch.isDown = false; this.touch.target = null; }
+  handleMove(x, y) {
+    if (!this.touch.isDown || !this.touch.target) return;
+    
+    const dy = y - this.touch.startY;
+    const threshold = 30; // 滑动阈值，超过此距离才触发
+    
+    // 如果移动超过阈值，取消长按计时
+    if (Math.abs(dy) > 10) {
+      this.touch.hasMoved = true;
+      clearTimeout(this.longPressTimer);
+    }
+    
+    // 检测上下滑动调整重要性
+    if (Math.abs(dy) > threshold) {
+      const todo = this.touch.target;
+      const adjustment = 0.05; // 每次调整0.05
+      
+      if (dy < -threshold) {
+        // 向上滑动 - 提高重要度
+        todo.targetImportance = Math.min(todo.targetImportance + adjustment, 1.0);
+        this.touch.startY = y; // 重置起始位置，允许连续调整
+      } else if (dy > threshold) {
+        // 向下滑动 - 降低重要度
+        todo.targetImportance = Math.max(todo.targetImportance - adjustment, 0.1);
+        this.touch.startY = y; // 重置起始位置，允许连续调整
+      }
+      
+      // 更新半径和颜色
+      todo.targetRadius = 20 + Math.pow(todo.targetImportance, 2) * 100;
+      const newColor = this.getColorByImportance(todo.targetImportance);
+      todo.color = newColor.bg;
+      todo.textColor = newColor.text;
+      
+      // 更新到 Firebase
+      this.updateTodoImportance(todo);
+    }
+  }
+  
+  async updateTodoImportance(todo) {
+    try {
+      await setDoc(doc(db, 'todos', todo.id), {
+        importance: todo.targetImportance,
+        reason: todo.reason,
+        updatedAt: serverTimestamp()
+      }, { merge: true });
+    } catch (e) {
+      console.error('Update importance failed:', e);
+    }
+  }
+  
+  handleEnd() { 
+    clearTimeout(this.longPressTimer); 
+    // 如果移动过，不触发完成
+    if (this.touch.hasMoved) {
+      this.touch.isDown = false;
+      this.touch.target = null;
+      this.touch.hasMoved = false;
+      return;
+    }
+    this.touch.isDown = false; 
+    this.touch.target = null; 
+  }
   
   async completeTodo(todo) {
     if (todo.done) return;
