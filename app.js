@@ -709,6 +709,7 @@ ${tasksText}
     const todo = this.getTodoAt(x, y);
     if (todo) {
       this.touch.target = todo;
+      todo.baseImportance = todo.targetImportance; // 记录起始重要度
       this.longPressTimer = setTimeout(() => this.completeTodo(todo), 600);
     }
   }
@@ -730,36 +731,25 @@ ${tasksText}
     todo.y += dy * 0.8; // 0.8系数让气泡有轻微滞后感
     todo.vy = 0; // 清除垂直速度，避免物理引擎干扰
     
-    // 根据总滑动距离调整重要度（每150px调整0.05）
-    const adjustmentThreshold = 30;
-    const adjustment = 0.02;
+    // 根据总滑动距离实时调整重要度（每50px调整0.01）
+    const pixelsPerAdjustment = 50;
+    const adjustmentPerStep = 0.01;
     
-    if (totalDy < -adjustmentThreshold) {
-      // 向上滑动超过阈值 - 提高重要度
-      const steps = Math.floor(Math.abs(totalDy) / adjustmentThreshold);
-      const newImportance = Math.min(todo.targetImportance + steps * adjustment, 1.0);
-      
-      if (newImportance !== todo.targetImportance) {
-        todo.targetImportance = newImportance;
-        todo.targetRadius = 20 + Math.pow(todo.targetImportance, 2) * 100;
-        const newColor = this.getColorByImportance(todo.targetImportance);
-        todo.color = newColor.bg;
-        todo.textColor = newColor.text;
-        this.updateTodoImportance(todo);
-      }
-    } else if (totalDy > adjustmentThreshold) {
-      // 向下滑动超过阈值 - 降低重要度
-      const steps = Math.floor(totalDy / adjustmentThreshold);
-      const newImportance = Math.max(todo.targetImportance - steps * adjustment, 0.1);
-      
-      if (newImportance !== todo.targetImportance) {
-        todo.targetImportance = newImportance;
-        todo.targetRadius = 20 + Math.pow(todo.targetImportance, 2) * 100;
-        const newColor = this.getColorByImportance(todo.targetImportance);
-        todo.color = newColor.bg;
-        todo.textColor = newColor.text;
-        this.updateTodoImportance(todo);
-      }
+    // 计算基于滑动距离的重要度变化
+    const importanceChange = (totalDy / pixelsPerAdjustment) * adjustmentPerStep;
+    
+    // 基础重要度 + 滑动带来的变化（向上滑动增加，向下滑动减少）
+    let newImportance = todo.baseImportance - importanceChange;
+    newImportance = Math.max(0.1, Math.min(1.0, newImportance));
+    
+    if (Math.abs(newImportance - todo.targetImportance) > 0.001) {
+      todo.targetImportance = newImportance;
+      todo.targetRadius = 20 + Math.pow(todo.targetImportance, 2) * 100;
+      const newColor = this.getColorByImportance(todo.targetImportance);
+      todo.color = newColor.bg;
+      todo.textColor = newColor.text;
+      // 节流：每100ms更新一次Firebase
+      this.throttledUpdateImportance(todo);
     }
     
     // 更新上一帧位置
@@ -775,6 +765,15 @@ ${tasksText}
       }, { merge: true });
     } catch (e) {
       console.error('Update importance failed:', e);
+    }
+  }
+  
+  throttledUpdateImportance(todo) {
+    // 简单的节流：如果上次更新超过100ms才执行
+    const now = Date.now();
+    if (!todo.lastImportanceUpdate || now - todo.lastImportanceUpdate > 100) {
+      todo.lastImportanceUpdate = now;
+      this.updateTodoImportance(todo);
     }
   }
   
