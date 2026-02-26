@@ -709,7 +709,12 @@ ${tasksText}
     const todo = this.getTodoAt(x, y);
     if (todo) {
       this.touch.target = todo;
-      todo.baseImportance = todo.targetImportance; // 记录起始重要度
+      // 确保 targetImportance 有效，否则使用 importance 作为后备
+      const validImportance = typeof todo.targetImportance === 'number' && isFinite(todo.targetImportance) 
+        ? todo.targetImportance 
+        : (typeof todo.importance === 'number' && isFinite(todo.importance) ? todo.importance : 0.5);
+      todo.baseImportance = validImportance;
+      todo.targetImportance = validImportance; // 同步确保一致
       this.longPressTimer = setTimeout(() => this.completeTodo(todo), 600);
     }
   }
@@ -742,7 +747,13 @@ ${tasksText}
     const importanceChange = (totalDy / pixelsPerAdjustment) * adjustmentPerStep;
     
     // 基础重要度 + 滑动带来的变化（向上滑动增加，向下滑动减少）
-    let newImportance = todo.baseImportance - importanceChange;
+    // 确保 baseImportance 有效
+    const validBaseImportance = typeof todo.baseImportance === 'number' && isFinite(todo.baseImportance) 
+      ? todo.baseImportance 
+      : (typeof todo.targetImportance === 'number' && isFinite(todo.targetImportance) ? todo.targetImportance : 0.5);
+    todo.baseImportance = validBaseImportance;
+    
+    let newImportance = validBaseImportance - importanceChange;
     newImportance = Math.max(0.1, Math.min(1.0, newImportance));
     
     if (Math.abs(newImportance - todo.targetImportance) > 0.001) {
