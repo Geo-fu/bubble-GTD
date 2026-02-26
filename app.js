@@ -718,6 +718,7 @@ ${tasksText}
     if (!this.touch.isDown || !this.touch.target) return;
     
     const todo = this.touch.target;
+    const dx = x - this.touch.x; // 当前帧与上一帧的X差值
     const dy = y - this.touch.y; // 当前帧与上一帧的Y差值
     const totalDy = y - this.touch.startY; // 总滑动距离
     
@@ -728,12 +729,14 @@ ${tasksText}
     }
     
     // 气泡跟随手指移动
-    todo.y += dy * 0.8; // 0.8系数让气泡有轻微滞后感
+    todo.x += dx * 0.8; // 0.8系数让气泡有轻微滞后感
+    todo.y += dy * 0.8;
+    todo.vx = 0; // 清除水平速度，避免物理引擎干扰
     todo.vy = 0; // 清除垂直速度，避免物理引擎干扰
     
-    // 根据总滑动距离实时调整重要度（每50px调整0.01）
+    // 根据总滑动距离实时调整重要度（每50px调整0.015）
     const pixelsPerAdjustment = 50;
-    const adjustmentPerStep = 0.01;
+    const adjustmentPerStep = 0.015;
     
     // 计算基于滑动距离的重要度变化
     const importanceChange = (totalDy / pixelsPerAdjustment) * adjustmentPerStep;
@@ -753,6 +756,7 @@ ${tasksText}
     }
     
     // 更新上一帧位置
+    this.touch.x = x;
     this.touch.y = y;
   }
   
