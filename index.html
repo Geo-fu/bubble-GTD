@@ -80,6 +80,21 @@
     
     #addBtn:active { transform: scale(0.95); }
     
+    #laodingBtn {
+      width: 50px; height: 50px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+      border: none;
+      color: white;
+      font-size: 14px;
+      cursor: pointer;
+      transition: transform 0.2s;
+      margin-left: 8px;
+      font-weight: bold;
+    }
+    
+    #laodingBtn:active { transform: scale(0.95); }
+    
     .hint {
       position: fixed;
       top: 20px; left: 50%;
@@ -100,6 +115,7 @@
     <div class="input-wrapper">
       <input type="text" id="todoInput" placeholder="输入待办事项..." />
       <button id="addBtn">+</button>
+      <button id="laodingBtn">老丁</button>
     </div>
   </div>
   
