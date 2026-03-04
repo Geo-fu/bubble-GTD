@@ -97,17 +97,70 @@ class BubbleTodo {
     // 暂时不使用 orderBy，避免索引问题
     const q = query(collection(db, 'todos'));
     
-    // 先显示加载提示
-    console.log('[BubbleGTD] Loading data...');
+    // 先尝试从本地缓存加载，实现秒开
+    const cachedData = localStorage.getItem('bubbleGTD_cache');
+    const cacheTimestamp = localStorage.getItem('bubbleGTD_cacheTime');
+    const cacheAge = cacheTimestamp ? Date.now() - parseInt(cacheTimestamp) : Infinity;
     
-    // 使用 get() 先获取一次数据，快速渲染
+    if (cachedData && cacheAge < 24 * 60 * 60 * 1000) { // 缓存24小时内有效
+      console.log('[BubbleGTD] Loading from local cache, age:', (cacheAge / 1000).toFixed(1), 's');
+      try {
+        const todos = JSON.parse(cachedData);
+        const cacheStart = performance.now();
+        todos.forEach((data) => {
+          const importance = typeof data.importance === 'number' ? data.importance : 0.5;
+          const colorConfig = this.getColorByImportance(importance);
+          const radius = this.getUniqueRadius(data.text || '', importance);
+          
+          this.todos.push({
+            id: data.id,
+            text: data.text || '',
+            importance: importance,
+            targetImportance: importance,
+            reason: data.reason || '一般任务',
+            radius: radius,
+            targetRadius: radius,
+            x: this.centerX + (Math.random() - 0.5) * 200,
+            y: this.centerY + (Math.random() - 0.5) * 200,
+            vx: 0, vy: 0,
+            color: colorConfig?.bg || { r: 100, g: 100, b: 100 },
+            textColor: colorConfig?.text || '#fff',
+            done: false, opacity: 1, scale: 1,
+            isAnalyzing: false,
+            restTime: 0
+          });
+        });
+        console.log('[BubbleGTD] Cache render took:', (performance.now() - cacheStart).toFixed(2), 'ms, items:', todos.length);
+      } catch (e) {
+        console.error('[BubbleGTD] Cache parse failed:', e);
+      }
+    } else {
+      console.log('[BubbleGTD] No valid cache, will load from Firebase');
+    }
+    
+    // 然后异步从 Firebase 获取最新数据（更新缓存）
     try {
       const getDocsStart = performance.now();
       const initialSnapshot = await getDocs(q);
       const getDocsEnd = performance.now();
       console.log('[BubbleGTD] getDocs took:', (getDocsEnd - getDocsStart).toFixed(2), 'ms, docs count:', initialSnapshot.docs.length);
       
-      // 快速渲染初始数据
+      // 更新本地缓存
+      const todosToCache = [];
+      initialSnapshot.docs.forEach((doc) => {
+        const data = doc.data();
+        todosToCache.push({
+          id: doc.id,
+          text: data.text || '',
+          importance: data.importance,
+          reason: data.reason || '一般任务'
+        });
+      });
+      localStorage.setItem('bubbleGTD_cache', JSON.stringify(todosToCache));
+      localStorage.setItem('bubbleGTD_cacheTime', Date.now().toString());
+      console.log('[BubbleGTD] Cache updated');
+      
+      // 合并新数据（如果缓存中没有的）
       const renderStart = performance.now();
       initialSnapshot.docs.forEach((doc) => {
         const data = doc.data();
@@ -138,16 +191,15 @@ class BubbleTodo {
           restTime: 0
         });
       });
-      const renderEnd = performance.now();
-      console.log('[BubbleGTD] Initial render took:', (renderEnd - renderStart).toFixed(2), 'ms');
+      console.log('[BubbleGTD] Firebase data merge took:', (performance.now() - renderStart).toFixed(2), 'ms');
     } catch (e) {
-      console.error('[BubbleGTD] Initial load failed:', e);
+      console.error('[BubbleGTD] Firebase load failed:', e);
     }
     
     const totalEnd = performance.now();
     console.log('[BubbleGTD] Total loadTodosFromFirebase took:', (totalEnd - startTime).toFixed(2), 'ms');
     
-    // 然后设置实时监听处理后续变更
+    // 设置实时监听处理后续变更
     console.log('[BubbleGTD] Setting up realtime listener...');
     this.unsubscribe = onSnapshot(q, (snapshot) => {
       console.log('[BubbleGTD] Snapshot received, docs count:', snapshot.docs.length);
