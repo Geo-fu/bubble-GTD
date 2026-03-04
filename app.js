@@ -35,9 +35,6 @@ class BubbleTodo {
     this.repulsionBase = 600;  // 显著增加排斥力，让不相关任务距离更远
     this.attractionBase = 0.008;  // 大幅增大相关性吸引力，形成紧密簇
     
-    // 任务间相关性数据（由 Gemini 分析）
-    this.relations = [];
-    
     // 先设置默认中心坐标，避免异步加载时 NaN
     this.canvas.width = window.innerWidth || 800;
     this.canvas.height = window.innerHeight || 600;
@@ -69,32 +66,12 @@ class BubbleTodo {
     const settingsBtn = document.getElementById('settingsBtn');
     const modal = document.getElementById('settingsModal');
     const closeBtn = document.getElementById('closeModal');
-    const saveBtn = document.getElementById('saveApiKey');
-    const apiKeyInput = document.getElementById('apiKeyInput');
-    
-    // 加载已保存的 key
-    const savedKey = localStorage.getItem('gemini-api-key');
-    if (savedKey) {
-      apiKeyInput.value = savedKey;
-    }
     
     settingsBtn.addEventListener('click', () => {
       modal.classList.add('active');
     });
     
     closeBtn.addEventListener('click', () => {
-      modal.classList.remove('active');
-    });
-    
-    saveBtn.addEventListener('click', () => {
-      const key = apiKeyInput.value.trim();
-      if (key) {
-        localStorage.setItem('gemini-api-key', key);
-        alert('API Key 已保存');
-      } else {
-        localStorage.removeItem('gemini-api-key');
-        alert('已清除 API Key，将使用本地分析');
-      }
       modal.classList.remove('active');
     });
     
@@ -204,247 +181,230 @@ class BubbleTodo {
   }
   
   /**
-   * 基于语义的重要性分析
-   * 使用语义相似度而非关键词匹配
+   * 基于复利思维的本地重要性分析
+   * 评分范围：0.1 - 1.0，扩大区分度
    */
   semanticAnalyze(text) {
     const lowerText = text.toLowerCase();
     
-    // 定义语义类别（包含同义词和相关概念）
-    const categories = [
-      {
-        name: '💰 金融/投资',
-        weight: 0.25,
-        patterns: [
-          /融资|并购|上市|ipo|尽调|尽职调查|审计|估值|投资|风控|合规|财报|财报|股权|债权|基金|证券|期货|外汇|理财|信托|保险|银行|贷款|抵押|担保|回购|定增|配股|分红|股息|利息|本金|收益|风险|回报|杠杆|对冲|套利|量化|私募|公募|vc|pe|lp|gp|irr|npv|roi|ebitda|pe ratio|pb/i
-        ]
-      },
-      {
-        name: '💼 商业关键',
-        weights: 0.15,
-        patterns: [
-          /谈判|签约|合作|客户|战略|决策|规划|商务|业务|销售|市场|品牌|渠道|供应链|采购|招标|投标|竞标|合同|协议|条款|违约|赔偿|仲裁|诉讼|法务|知识产权|专利|商标|版权|许可|授权|加盟|代理|分销|零售|批发|电商|直播|社群|私域/i
-        ]
-      },
-      {
-        name: '📈 复利/成长',
-        weight: 0.12,
-        patterns: [
-          /学习|读书|技能|产品|系统|团队|流程|知识|能力|经验|成长|进步|提升|培训|教育|课程|证书|学历|学位|专业|专家|资深|架构|设计|开发|测试|运维|管理|领导力|沟通|协作|效率|工具|方法|框架|模型|理论|实践|复盘|总结|沉淀|积累/i
-        ]
-      },
-      {
-        name: '⏰ 紧急/ deadline',
-        weight: 0.08,
-        patterns: [
-          /紧急|马上|立刻|deadline|截止|今天|明天|本周|下周|月底前|季度末|年底前| asap|尽快|赶|催|急|火烧眉毛|刻不容缓|迫在眉睫|当务之急/i
-        ]
-      },
-      {
-        name: '👥 人际/关系',
-        weight: 0.06,
-        patterns: [
-          /老板|领导|上级|下属|同事|团队|客户|用户|合作伙伴|投资人|股东|董事会|高管|中层|骨干|新人| mentor|导师| mentee|徒弟|朋友|家人|亲戚|关系|人脉|资源|圈子|社群|组织|协会/i
-        ]
-      },
-      {
-        name: '🔧 执行/落地',
-        weight: 0.05,
-        patterns: [
-          /执行|落地|实施|推进|跟进|落实|完成|交付|上线|发布|发布|部署|配置|安装|调试|测试|验收|确认|签字|盖章|归档|存档|备案|登记|注册|申请|审批|审核|核准/i
-        ]
-      }
+    // ===== 极高复利价值 (0.85-1.0) =====
+    // 战略级决策、核心资产、长期复利引擎
+    const ultraHighValue = [
+      /融资|ipo|上市|并购|估值|股权架构|控制权|董事会|股东会|战略投资/,
+      /核心算法|专利布局|知识产权|技术壁垒|护城河|垄断优势/,
+      /创始人|ceo|cto|合伙人|核心团队组建|股权激励|期权池/,
+      /商业模式|盈利模式|现金流结构|复利系统|自动化收入/,
+      /品牌定位|市场定义|品类开创|标准制定|行业规则/,
+      /关键人脉|核心资源|独家合作|战略联盟|生态位/,
+      /健康.*习惯|运动.*习惯|阅读.*习惯|写作.*习惯|思考.*习惯/,
+      /家庭.*教育|子女.*教育|认知.*传承|家风|价值观.*传承/
     ];
     
-    let score = 0.5; // 基础分
-    const matchedCategories = [];
+    // ===== 高复利价值 (0.7-0.85) =====
+    // 重要项目、关键能力、重要关系
+    const highValue = [
+      /产品.*迭代|版本.*规划|路线图|里程碑|发布|上线/,
+      /客户.*签约|大客户|战略客户|关键客户|客户成功/,
+      /团队.*搭建|人才.*招聘|关键岗位|骨干培养|梯队建设/,
+      /市场营销|品牌建设|内容策略|用户增长|获客渠道/,
+      /数据分析|用户洞察|竞品分析|市场调研|趋势判断/,
+      /财务规划|预算管理|成本控制|现金流|财务报表/,
+      /法律合规|合同审核|风险评估|合规体系|审计/,
+      /技能.*提升|专业.*认证|学历.*提升|跨界.*学习/,
+      /关键.*关系|深度.*社交|导师.*关系|贵人.*维护/,
+      /运动.*系统|健身.*计划|饮食.*管理|睡眠.*优化/
+    ];
     
-    // 计算每个类别的匹配度
-    for (const cat of categories) {
-      let matchCount = 0;
-      for (const pattern of cat.patterns) {
-        const matches = lowerText.match(pattern);
-        if (matches) {
-          matchCount += matches.length;
+    // ===== 中等复利价值 (0.5-0.7) =====
+    // 日常执行、常规学习、一般维护
+    const mediumValue = [
+      /会议|讨论|沟通|协调|跟进|推进|落实|执行/,
+      /文档|报告|总结|复盘|整理|归档|备案/,
+      /学习|读书|课程|培训|练习|实验|尝试/,
+      /日常.*维护|常规.*工作|标准.*流程|sop/,
+      /社交|聚会|活动|应酬|人情.*往来/,
+      /家庭.*日常|家务|采购|维修|保养/,
+      /健康.*检查|体检|疫苗|保健|养生/
+    ];
+    
+    // ===== 低复利价值 (0.3-0.5) =====
+    // 临时事务、被动响应、低价值活动
+    const lowValue = [
+      /回复|答复|确认|收到|好的|ok|okay|嗯|哦|啊/,
+      /临时|突发|紧急.*但不重要|救火|补丁/,
+      /重复.*劳动|机械.*工作|纯.*体力|无.*积累/,
+      /娱乐|消遣|刷.*视频|游戏|八卦|闲聊/,
+      /抱怨|吐槽|消极.*情绪|内耗|焦虑.*无行动/
+    ];
+    
+    // ===== 极低复利价值 (0.1-0.3) =====
+    // 纯粹消耗、负面价值
+    const ultraLowValue = [
+      /无意义|浪费.*时间|纯粹.*消耗|无效.*社交/,
+      /沉迷|上瘾|失控|过度|报复.*性/
+    ];
+    
+    // ===== 时间维度加权 =====
+    // 长期 vs 短期
+    const longTerm = [
+      /长期|战略|规划|愿景|三年|五年|十年|终身|一生/,
+      /积累|沉淀|复利|滚雪球|时间.*朋友|延迟.*满足/
+    ];
+    
+    const shortTerm = [
+      /马上|立刻|今天.*必须|今晚|明天.*早上|asap|尽快|急/,
+      /临时|突击|熬夜|加班|赶工|冲刺/
+    ];
+    
+    // ===== 杠杆维度加权 =====
+    // 高杠杆 vs 低杠杆
+    const highLeverage = [
+      /自动化|系统化|规模化|批量化|可复制|可扩展/,
+      /团队|外包|分工|协作|杠杆|借力|借势/,
+      /产品化|服务化|数字化|线上化|智能化/,
+      /一次.*投入|持续.*产出|睡后.*收入|被动.*收入/
+    ];
+    
+    const lowLeverage = [
+      /亲自|亲手|自己.*做|单打.*独斗|一个人|孤立/,
+      /一次性|临时性|不可.*复制|不可.*持续/
+    ];
+    
+    // 计算基础分
+    let baseScore = 0.5;
+    let matchedCategories = [];
+    
+    // 检查极高价值
+    for (const pattern of ultraHighValue) {
+      if (pattern.test(lowerText)) {
+        baseScore = Math.max(baseScore, 0.85 + Math.random() * 0.15);
+        matchedCategories.push('🚀 极高复利');
+        break;
+      }
+    }
+    
+    // 检查高价值（如果还没达到极高）
+    if (baseScore < 0.85) {
+      for (const pattern of highValue) {
+        if (pattern.test(lowerText)) {
+          baseScore = Math.max(baseScore, 0.7 + Math.random() * 0.15);
+          matchedCategories.push('📈 高复利');
+          break;
         }
       }
-      
-      if (matchCount > 0) {
-        // 匹配越多，权重递减（避免重复词汇堆砌）
-        const effectiveWeight = cat.weight * Math.min(matchCount, 3) / Math.max(matchCount, 1);
-        score += effectiveWeight;
-        matchedCategories.push(cat.name);
+    }
+    
+    // 检查中等价值
+    if (baseScore < 0.7) {
+      for (const pattern of mediumValue) {
+        if (pattern.test(lowerText)) {
+          baseScore = Math.max(baseScore, 0.5 + Math.random() * 0.2);
+          matchedCategories.push('📊 中等复利');
+          break;
+        }
       }
     }
     
-    // 语义增强：检测复合概念（如"融资谈判"比单独的"融资"+"谈判"更重要）
+    // 检查低价值
+    if (baseScore < 0.5) {
+      for (const pattern of lowValue) {
+        if (pattern.test(lowerText)) {
+          baseScore = Math.max(baseScore, 0.3 + Math.random() * 0.2);
+          matchedCategories.push('📉 低复利');
+          break;
+        }
+      }
+    }
+    
+    // 检查极低价值
+    if (baseScore < 0.3) {
+      for (const pattern of ultraLowValue) {
+        if (pattern.test(lowerText)) {
+          baseScore = Math.max(baseScore, 0.1 + Math.random() * 0.2);
+          matchedCategories.push('⛔ 极低复利');
+          break;
+        }
+      }
+    }
+    
+    // 时间维度调整
+    let timeMultiplier = 1.0;
+    const hasLongTerm = longTerm.some(p => p.test(lowerText));
+    const hasShortTerm = shortTerm.some(p => p.test(lowerText));
+    
+    if (hasLongTerm && !hasShortTerm) {
+      timeMultiplier = 1.15; // 长期视角加分
+      matchedCategories.push('⏳ 长期视角');
+    } else if (hasShortTerm && !hasLongTerm) {
+      timeMultiplier = 0.85; // 纯短期视角减分
+      matchedCategories.push('⏰ 短期紧急');
+    }
+    
+    // 杠杆维度调整
+    let leverageMultiplier = 1.0;
+    const hasHighLeverage = highLeverage.some(p => p.test(lowerText));
+    const hasLowLeverage = lowLeverage.some(p => p.test(lowerText));
+    
+    if (hasHighLeverage && !hasLowLeverage) {
+      leverageMultiplier = 1.15; // 高杠杆加分
+      matchedCategories.push('⚡ 高杠杆');
+    } else if (hasLowLeverage && !hasHighLeverage) {
+      leverageMultiplier = 0.85; // 低杠杆减分
+      matchedCategories.push('🔧 低杠杆');
+    }
+    
+    // 复合概念检测（额外加分）
     const compoundPatterns = [
-      { pattern: /融资.*谈判|谈判.*融资/, bonus: 0.1 },
-      { pattern: /战略.*规划|规划.*战略/, bonus: 0.08 },
-      { pattern: /团队.*建设|建设.*团队/, bonus: 0.06 },
-      { pattern: /产品.*上线|上线.*产品/, bonus: 0.07 },
-      { pattern: /客户.*签约|签约.*客户/, bonus: 0.09 },
-      { pattern: /紧急.*重要|重要.*紧急/, bonus: 0.1 }
+      { pattern: /战略.*规划|规划.*战略/, bonus: 0.08, label: '🔗 战略规划' },
+      { pattern: /核心.*团队|团队.*核心/, bonus: 0.08, label: '🔗 核心团队' },
+      { pattern: /产品.*迭代|迭代.*产品/, bonus: 0.06, label: '🔗 产品迭代' },
+      { pattern: /客户.*成功|成功.*客户/, bonus: 0.06, label: '🔗 客户成功' },
+      { pattern: /自动.*化|系统.*化/, bonus: 0.07, label: '🔗 系统化' },
+      { pattern: /复利.*思维|思维.*复利/, bonus: 0.1, label: '🔗 复利思维' },
+      { pattern: /长期.*主义|主义.*长期/, bonus: 0.08, label: '🔗 长期主义' },
+      { pattern: /习惯.*养成|养成.*习惯/, bonus: 0.07, label: '🔗 习惯养成' }
     ];
     
+    let compoundBonus = 0;
     for (const compound of compoundPatterns) {
       if (compound.pattern.test(lowerText)) {
-        score += compound.bonus;
-        matchedCategories.push('🔗 复合概念');
-        break; // 只加一次复合概念 bonus
+        compoundBonus += compound.bonus;
+        matchedCategories.push(compound.label);
       }
     }
     
-    // 降低低价值任务的分数
-    const lowValuePatterns = /^(回复|确认|收到|好的|谢谢|ok|okay|嗯|哦|啊|吧|呢)[\s!！.。]*$/i;
-    if (lowValuePatterns.test(text.trim()) && matchedCategories.length === 0) {
-      score -= 0.15;
+    // 计算最终分数
+    let finalScore = baseScore * timeMultiplier * leverageMultiplier + compoundBonus;
+    
+    // 长度惩罚/奖励
+    if (text.length < 3 && matchedCategories.length === 0) {
+      finalScore -= 0.15; // 太短且无匹配，减分
+    } else if (text.length > 15 && matchedCategories.length >= 2) {
+      finalScore += 0.03; // 详细描述且多维度匹配，加分
     }
     
-    // 长度惩罚：太短的描述通常信息不足
-    if (text.length < 5 && matchedCategories.length === 0) {
-      score -= 0.05;
-    }
+    // 确保在有效范围内
+    finalScore = Math.min(Math.max(finalScore, 0.1), 1.0);
     
-    // 长度奖励：详细描述通常更重要
-    if (text.length > 20 && matchedCategories.length > 0) {
-      score += 0.03;
+    // 生成原因描述
+    let reason = matchedCategories.slice(0, 3).join(' | ');
+    if (!reason) {
+      if (finalScore >= 0.7) reason = '📈 潜在高价值';
+      else if (finalScore >= 0.5) reason = '📊 一般价值';
+      else reason = '📉 低价值/待评估';
     }
     
     return {
-      score: Math.min(Math.max(score, 0.15), 0.9),
-      reason: matchedCategories.slice(0, 3).join(' | ') || '一般任务',
-      needsAI: matchedCategories.length === 0 || score > 0.75
+      score: finalScore,
+      reason: reason
     };
   }
   
   /**
-   * Gemini API 批量分析 - 同时评估重要性和任务间相关性
-   * 一次性分析所有任务，减少 API 调用
-   */
-  async geminiAnalyzeAll(todos) {
-    // 从环境变量或配置中读取 API Key
-    const API_KEY = window.GEMINI_API_KEY || '';
-    
-    if (!API_KEY) {
-      console.warn('[BubbleGTD] Gemini API Key not configured');
-      return null;
-    }
-    
-    // 构建任务列表文本
-    const tasksText = todos.map((t, i) => `${i + 1}. ${t.text}`).join('\n');
-    
-    try {
-      const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${API_KEY}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents: [{
-              parts: [{
-                text: `你是一位专业的任务管理顾问，请分析以下任务列表。
-
-## 任务列表
-${tasksText}
-
-## 分析要求
-
-### 1. 重要性评估 (0-1)
-基于复利思维评估每个任务的重要性：
-- **时间价值**：对未来有多大累积效应
-- **杠杆效应**：一份努力能否产生多份回报
-- **紧急程度**：时间敏感度
-- **战略价值**：对长期目标的影响
-
-评分标准：
-- 0.9-1.0：极高价值（如融资、战略决策）
-- 0.7-0.9：高价值（如重要客户、关键项目）
-- 0.5-0.7：中等价值（如日常学习、团队建设）
-- 0.3-0.5：一般价值（如常规会议、文档整理）
-- 0.1-0.3：低价值（如简单回复、琐事）
-
-### 2. 相关性评估 (0-1)
-你是心之声CEO，评估任务相关性时从三个维度考虑：
-
-**维度分类**：
-- 🏢 **公司/工作**：融资、产品、团队、客户、战略、运营
-- 🏠 **家庭**：家人、伴侣、子女、父母、家务、家庭决策
-- 👤 **个人生活**：健康、学习、社交、兴趣爱好、个人成长
-
-**高相关 (0.7-1.0)**：
-- 同一维度内的强关联（如"融资路演"和"投资人会议"）
-- 因果关系（如"产品上线"→"用户反馈收集"）
-- 同一项目/主题的不同环节
-
-**中等相关 (0.4-0.7)**：
-- 同一维度内的弱关联（如"团队招聘"和"团队团建"）
-- 跨维度但有时间关联（如"加班赶项目"和"推迟家庭聚会"）
-
-**低相关 (0-0.4)**：
-- 完全不同维度（如"融资谈判"和"周末爬山"）
-- 无直接关联的独立任务
-
-## 输出格式
-只返回JSON：
-{
-  "tasks": [
-    {"index": 1, "score": 0.85, "reason": "💰 关键融资活动", "tags": ["金融", "高杠杆"]},
-    {"index": 2, "score": 0.45, "reason": "📋 日常事务", "tags": ["行政"]}
-  ],
-  "relations": [
-    {"from": 1, "to": 2, "score": 0.75, "reason": "同一项目环节"},
-    {"from": 3, "to": 4, "score": 0.3, "reason": "同一领域"}
-  ]
-}
-
-注意：
-- 只返回相关性 >= 0.3 的配对
-- reason 要简洁（10字以内）
-- 不要返回任何其他文字`
-              }]
-            }],
-            generationConfig: { temperature: 0.3, maxOutputTokens: 1000 }
-          })
-        }
-      );
-      
-      if (!response.ok) throw new Error(`API error: ${response.status}`);
-      
-      const data = await response.json();
-      const content = data.candidates[0].content.parts[0].text;
-      
-      const jsonMatch = content.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        return JSON.parse(jsonMatch[0]);
-      }
-    } catch (e) {
-      console.error('[BubbleGTD] Gemini batch analysis failed:', e.message);
-    }
-    return null;
-  }
-  
-  /**
-   * 分析单个任务（使用本地分析，批量分析时调用 geminiAnalyzeAll）
-   */
-  localAnalyze(text) {
-    return this.semanticAnalyze(text);
-  }
-  
-  /**
    * 计算任务间相关性（用于物理引擎）
-   * 基于 Gemini 返回的相关性数据或本地计算
+   * 基于三个维度本地计算
    */
   getTaskRelation(todo1, todo2) {
-    // 如果有 Gemini 分析的相关性数据，直接使用
-    if (this.relations) {
-      const rel = this.relations.find(r => 
-        (r.from === todo1.id && r.to === todo2.id) ||
-        (r.from === todo2.id && r.to === todo1.id)
-      );
-      if (rel) return rel.score;
-    }
-    
     // 本地计算相关性：基于CEO的三个维度
     const text1 = (todo1.text + ' ' + (todo1.reason || '')).toLowerCase();
     const text2 = (todo2.text + ' ' + (todo2.reason || '')).toLowerCase();
@@ -553,8 +513,8 @@ ${tasksText}
     const text = input.value.trim();
     if (!text) return;
 
-    // 先使用本地分析快速显示
-    const quickAnalysis = this.localAnalyze(text);
+    // 使用本地分析
+    const quickAnalysis = this.semanticAnalyze(text);
     const id = Date.now().toString();
 
     // 立即本地显示（0.1秒内）
@@ -569,7 +529,7 @@ ${tasksText}
       text: text,
       importance: quickAnalysis.score,
       targetImportance: quickAnalysis.score,
-      reason: quickAnalysis.reason + ' (分析中...)',
+      reason: quickAnalysis.reason,
       radius: radius,
       targetRadius: radius,
       x: this.centerX + (Math.random() - 0.5) * 200,
@@ -578,7 +538,7 @@ ${tasksText}
       color: colorConfig.bg,
       textColor: colorConfig.text,
       done: false, opacity: 1, scale: 1,
-      isAnalyzing: true,
+      isAnalyzing: false,
       restTime: 0
     };
 
@@ -590,65 +550,8 @@ ${tasksText}
       text: text,
       importance: quickAnalysis.score,
       reason: quickAnalysis.reason,
-      needsAI: true,
-      aiAnalyzed: false,
       createdAt: serverTimestamp()
     }).catch(e => console.error('[BubbleGTD] Save failed:', e));
-
-    // 批量 Gemini 分析（分析所有任务，包括新添加的）
-    if (this.todos.length >= 1) {
-      console.log('[BubbleGTD] Starting batch Gemini analysis...');
-
-      // 延迟执行，等待 Firebase 同步
-      setTimeout(async () => {
-        const allTodos = this.todos.filter(t => !t.done).map((t, idx) => ({
-          index: idx + 1,
-          id: t.id,
-          text: t.text
-        }));
-
-        const result = await this.geminiAnalyzeAll(allTodos);
-
-        if (result && result.tasks) {
-          console.log('[BubbleGTD] Batch analysis complete:', result);
-
-          // 更新所有任务的重要性
-          result.tasks.forEach(task => {
-            const todo = this.todos.find(t => t.id === allTodos[task.index - 1]?.id);
-            if (todo) {
-              todo.importance = task.score;
-              todo.targetImportance = task.score;
-              todo.reason = task.reason;
-              todo.targetRadius = 20 + Math.pow(task.score, 2) * 100;
-              const newColor = this.getColorByImportance(task.score);
-              todo.color = newColor.bg;
-              todo.textColor = newColor.text;
-              todo.isAnalyzing = false;
-
-              // 更新 Firebase
-              setDoc(doc(db, 'todos', todo.id), {
-                text: todo.text,
-                importance: task.score,
-                reason: task.reason,
-                needsAI: false,
-                aiAnalyzed: true,
-                createdAt: serverTimestamp()
-              }).catch(e => console.error('[BubbleGTD] Update failed:', e));
-            }
-          });
-
-          // 保存相关性数据
-          if (result.relations) {
-            this.relations = result.relations.map(r => ({
-              from: allTodos[r.from - 1]?.id,
-              to: allTodos[r.to - 1]?.id,
-              score: r.score,
-              reason: r.reason || ''
-            })).filter(r => r.from && r.to);
-          }
-        }
-      }, 1000);
-    }
   }
   
   triggerExplosion(todo) {
