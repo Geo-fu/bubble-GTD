@@ -3,7 +3,7 @@
 
 // Firebase 配置
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-app.js";
-import { getFirestore, collection, doc, setDoc, deleteDoc, onSnapshot, query, serverTimestamp } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-firestore.js";
+import { getFirestore, collection, doc, setDoc, deleteDoc, onSnapshot, query, serverTimestamp, getDocs } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-firestore.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyCsdgcHag_08oDCn6pGZU9Sq4tiz762IUU",
@@ -88,8 +88,50 @@ class BubbleTodo {
     // 暂时不使用 orderBy，避免索引问题
     const q = query(collection(db, 'todos'));
     
-    // 只使用实时监听，不阻塞加载
-    console.log('[BubbleGTD] Setting up Firebase listener...');
+    // 先显示加载提示
+    console.log('[BubbleGTD] Loading data...');
+    
+    // 使用 get() 先获取一次数据，快速渲染
+    try {
+      const initialSnapshot = await getDocs(q);
+      console.log('[BubbleGTD] Initial load, docs count:', initialSnapshot.docs.length);
+      
+      // 快速渲染初始数据
+      initialSnapshot.docs.forEach((doc) => {
+        const data = doc.data();
+        const id = doc.id;
+        
+        // 检查是否已存在
+        if (this.todos.findIndex(t => t.id === id) !== -1) return;
+        
+        const importance = typeof data.importance === 'number' ? data.importance : 0.5;
+        const colorConfig = this.getColorByImportance(importance);
+        const radius = this.getUniqueRadius(data.text || '', importance);
+        
+        this.todos.push({
+          id: id,
+          text: data.text || '',
+          importance: importance,
+          targetImportance: importance,
+          reason: data.reason || '一般任务',
+          radius: radius,
+          targetRadius: radius,
+          x: this.centerX + (Math.random() - 0.5) * 200,
+          y: this.centerY + (Math.random() - 0.5) * 200,
+          vx: 0, vy: 0,
+          color: colorConfig?.bg || { r: 100, g: 100, b: 100 },
+          textColor: colorConfig?.text || '#fff',
+          done: false, opacity: 1, scale: 1,
+          isAnalyzing: false,
+          restTime: 0
+        });
+      });
+    } catch (e) {
+      console.error('[BubbleGTD] Initial load failed:', e);
+    }
+    
+    // 然后设置实时监听处理后续变更
+    console.log('[BubbleGTD] Setting up realtime listener...');
     this.unsubscribe = onSnapshot(q, (snapshot) => {
       console.log('[BubbleGTD] Snapshot received, docs count:', snapshot.docs.length);
       // 处理初始数据和变更
