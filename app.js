@@ -45,6 +45,9 @@ class BubbleTodo {
   }
   
   init() {
+    const initStart = performance.now();
+    console.log('[BubbleGTD] init started');
+    
     this.resize();
     window.addEventListener('resize', () => this.resize());
     this.canvas.addEventListener('touchstart', (e) => this.handleStart(e.touches[0].clientX, e.touches[0].clientY), {passive: false});
@@ -57,6 +60,9 @@ class BubbleTodo {
     document.getElementById('todoInput').addEventListener('keypress', (e) => {
       if (e.key === 'Enter') this.addTodo();
     });
+    
+    const initEnd = performance.now();
+    console.log('[BubbleGTD] init took:', (initEnd - initStart).toFixed(2), 'ms');
     
     // 直接加载数据，不需要登录
     this.loadTodosFromFirebase();
@@ -84,6 +90,9 @@ class BubbleTodo {
   }
   
   async loadTodosFromFirebase() {
+    const startTime = performance.now();
+    console.log('[BubbleGTD] loadTodosFromFirebase started at:', startTime);
+    
     // 使用简单的集合结构，所有人共享
     // 暂时不使用 orderBy，避免索引问题
     const q = query(collection(db, 'todos'));
@@ -93,10 +102,13 @@ class BubbleTodo {
     
     // 使用 get() 先获取一次数据，快速渲染
     try {
+      const getDocsStart = performance.now();
       const initialSnapshot = await getDocs(q);
-      console.log('[BubbleGTD] Initial load, docs count:', initialSnapshot.docs.length);
+      const getDocsEnd = performance.now();
+      console.log('[BubbleGTD] getDocs took:', (getDocsEnd - getDocsStart).toFixed(2), 'ms, docs count:', initialSnapshot.docs.length);
       
       // 快速渲染初始数据
+      const renderStart = performance.now();
       initialSnapshot.docs.forEach((doc) => {
         const data = doc.data();
         const id = doc.id;
@@ -126,9 +138,14 @@ class BubbleTodo {
           restTime: 0
         });
       });
+      const renderEnd = performance.now();
+      console.log('[BubbleGTD] Initial render took:', (renderEnd - renderStart).toFixed(2), 'ms');
     } catch (e) {
       console.error('[BubbleGTD] Initial load failed:', e);
     }
+    
+    const totalEnd = performance.now();
+    console.log('[BubbleGTD] Total loadTodosFromFirebase took:', (totalEnd - startTime).toFixed(2), 'ms');
     
     // 然后设置实时监听处理后续变更
     console.log('[BubbleGTD] Setting up realtime listener...');
